@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Pocket Homestead Rogue — Prototype</title>
+<style>
+  html,body{height:100%;margin:0;background:#111;color:#ddd;font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP";}
+  #gameWrap{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;height:100%;}
+  canvas{background:#2b2b2b; image-rendering: pixelated; border-radius:6px;}
+  .hud{width:100%;max-width:480px;padding:6px;box-sizing:border-box;display:flex;justify-content:space-between;align-items:center;}
+  .btn{background:#222;border:1px solid #444;padding:6px 8px;border-radius:6px;color:#eee}
+  .bottomUI{width:100%;max-width:480px;display:flex;justify-content:space-between;align-items:center;padding:6px;box-sizing:border-box;}
+  .inventory{display:flex;gap:6px;align-items:center;}
+  .slot{width:34px;height:34px;background:#151515;border:1px solid #333;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff}
+  .small{font-size:12px;color:#bbb}
+  .controls{position:relative;display:flex;gap:8px;align-items:center}
+  .exportArea{width:100%;max-width:480px;margin-top:6px;}
+  .footerNote{font-size:12px;color:#888;margin-top:4px;}
+</style>
+</head>
+<body>
+<div id="gameWrap">
+  <div class="hud">
+    <div>
+      <div class="small">HP <span id="hpText">30/30</span> | Runs: <span id="runCount">0</span></div>
+      <div class="small">Party: <span id="partyText">0/3</span></div>
+    </div>
+    <div>
+      <button class="btn" id="saveBtn">Save</button>
+      <button class="btn" id="loadBtn">Load</button>
+    </div>
+  </div>
+
+  <!-- Canvas: logical size will be scaled to fit -->
+  <canvas id="c"></canvas>
+
+  <div class="bottomUI">
+    <div class="inventory" id="inventory">
+      <div class="slot" id="slot_seed">Seed x5</div>
+      <div class="slot" id="slot_trap">Trap x1</div>
+    </div>
+    <div class="controls">
+      <button class="btn" id="dungeonBtn">Enter Dungeon</button>
+      <button class="btn" id="exportBtn">Export Save</button>
+    </div>
+  </div>
+
+  <div class="exportArea">
+    <textarea id="exportArea" style="width:100%;height:80px;background:#0f0f12;color:#ddd;border:1px solid #222;padding:6px;display:none"></textarea>
+    <div class="footerNote">このプロトタイプは最小機能です。画像はプレースホルダで描画しています。</div>
+  </div>
+</div>
+
+<script>
+/*
+ Pocket Homestead Rogue - Prototype
+ Canvas-based, vertical, tile 16px.
+ - Tilesize: 16
+ - Map: home and small dungeon
+ - Movement: virtual stick (pointer drag) + simple buttons
+ - Saves to localStorage (pocketHomestead_v1_save)
+ - Crops grow when returning from dungeon (runCount increments)
+ - Simple capture logic
+*/
+
+// ===== CONFIG =====
+const TILE = 16;
+const VIEW_W_TILES = 9;    // viewport width in tiles
+const VIEW_H_TILES = 16;   // viewport height in tiles (portrait)
+const CANVAS_W = VIEW_W_TILES * TILE;
+const CANVAS_H = VIEW_H_TILES * TILE;
+const SAVE_KEY = 'pocketHomestead_v1_save';
+
+// ===== UTIL =====
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+
+// ===== DOM =====
+const canvas = document.getElementById('c');
+canvas.width = CANVAS_W;
+canvas.height = CANVAS_H;
+canvas.style.width = Math.min(window.innerWidth-12,480) + 'px';
+canvas.style.height = (canvas.height * (parseInt(canvas.style.width)/canvas.width)) + 'px';
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const hpText = document.getElementById('hpText');
+const runCountText = document.getElementById('runCount');
+const partyText = document.getElementById('partyText');
+const saveBtn = document.getElementById('saveBtn');
+const loadBtn = document.getElementById('loadBtn');
+const dungeonBtn = document.getElementById('dungeonBtn');
+const exportBtn = document.getElementById('exportBtn');
+const exportArea = document.getElementById('exportArea');
+const slotSeed = document.getElementById('slot_seed');
+const slotTrap = document.getElementById('slot_trap');
+
+// ===== GAME STATE =====
+let state = {
+  player: {hp:30, maxHp:30, x:8, y:12, px:8, py:12},
+  inventory: {seed_wheat:5, trap_egg:1, fertilizer_basic:0},
+  party: [], // each: {id, level, exp}
+  map: { // simple home map 20x20
+    home: {w:20,h:20, tiles:[] , plots:[]},
+    dungeon: null
+  },
+  ui: {inDungeon:false},
+  time: {runCount:0}
+};
+
+// create base home tiles (0=grass,1=soil,2=rock)
+function makeHome(){
+  const w=20,h=20;
+  const tiles = new Array(h);
+  for(let y=0;y<h;y++){
+    tiles[y]=new Array(w);
+    for(let x=0;x<w;x++){
+      tiles[y][x] = (Math.random()<0.05?2:(Math.random()<0.25?1:0));
+    }
+  }
+  // make center area as home ground
+  for(let y=8;y<12;y++) for(let x=6;x<14;x++) tiles[y][x]=0;
+  return {w,h,tiles,plots:[]};
+}
+state.map.home = makeHome();
+// add some farm plots
+state.map.home.plots.push({x:7,y:9,crop:null,stage:0});
+state.map.home.plots.push({x:9,y:9,crop:null,stage:0});
+state.map.home.plots.push({x:11,y:9,crop:null,stage:0});
+
+// simple dungeon generator
+function genDungeon(seed){
+  const w=16,h=12;
+  const tiles = new Array(h);
+  for(let y=0;y<h;y++){
+    tiles[y]=new Array(w).fill(0); // 0 floor
+  }
+  // put random walls
+  for(let i=0;i<30;i++){
+    tiles[randInt(1,h-2)][randInt(1,w-2)] = 1; // wall
+  }
+  // spawn monsters list
+  const monsters=[];
+  for(let i=0;i<8;i++){
+    monsters.push({id:'slime',x:randInt(1,w-2),y:randInt(1,h-2),hp:5,maxHp:5});
+  }
+  // place some items
+  const items=[];
+  items.push({id:'sample_ore',x:randInt(1,w-2),y:randInt(1,h-2)});
+  return {w,h,tiles,monsters,items,seed};
+}
+
+// save/load
+function saveGame(){
+  const s = JSON.stringify(state);
+  localStorage.setItem(SAVE_KEY,s);
+  alert('Saved (localStorage). Export or check storage to backup.');
+}
+function loadGame(){
+  const raw = localStorage.getItem(SAVE_KEY);
+  if(!raw){ alert('No save found.'); return; }
+  try{
+    const obj = JSON.parse(raw);
+    state = obj;
+    updateUI();
+    alert('Loaded.');
+  }catch(e){
+    alert('Failed to parse save.');
+  }
+}
+saveBtn.onclick = saveGame;
+loadBtn.onclick = loadGame;
+
+// export / import
+exportBtn.onclick = function(){
+  exportArea.style.display = exportArea.style.display === 'none' ? 'block' : 'none';
+  if(exportArea.style.display==='block'){
+    exportArea.value = JSON.stringify(state);
+  } else exportArea.value='';
+};
+
+// ===== UI Update =====
+function updateUI(){
+  hpText.textContent = `${state.player.hp}/${state.player.maxHp}`;
+  runCountText.textContent = state.time.runCount;
+  partyText.textContent = `${state.party.length}/3`;
+  slotSeed.textContent = `Seed x${state.inventory.seed_wheat||0}`;
+  slotTrap.textContent = `Trap x${state.inventory.trap_egg||0}`;
+}
+
+// ===== INPUT (simple virtual stick) =====
+let moveDir = {x:0,y:0};
+let pointerId = null;
+canvas.addEventListener('touchstart', onPointerDown, {passive:false});
+canvas.addEventListener('touchmove', onPointerMove, {passive:false});
+canvas.addEventListener('touchend', onPointerUp, {passive:false});
+canvas.addEventListener('mousedown', e=>onPointerDown(mouseToTouch(e)), {passive:false});
+canvas.addEventListener('mousemove', e=>onPointerMove(mouseToTouch(e)), {passive:false});
+canvas.addEventListener('mouseup', e=>onPointerUp(mouseToTouch(e)), {passive:false});
+
+function mouseToTouch(e){
+  return {clientX:e.clientX, clientY:e.clientY, pointerId:'mouse'};
+}
+
+function onPointerDown(e){
+  e.preventDefault();
+  const p = getPoint(e);
+  // left-bottom area = joystick (approx left 40% bottom 40%)
+  const rect = canvas.getBoundingClientRect();
+  const cx = p.x - rect.left;
+  const cy = p.y - rect.top;
+  if(cx < rect.width*0.5 && cy > rect.height*0.5){
+    // joystick control: set moveDir toward touch relative to center of left-bottom quarter
+    pointerId = e.pointerId || 'touch';
+    calcMoveFrom(cx,cy, rect);
+  } else {
+    // outside joystick: interpret as action button (attack/use)
+    handleActionAtScreen(cx,cy,rect);
+  }
+}
+function onPointerMove(e){
+  if(pointerId==null) return;
+  const p = getPoint(e);
+  const rect = canvas.getBoundingClientRect();
+  const cx = p.x - rect.left; const cy = p.y - rect.top;
+  calcMoveFrom(cx,cy,rect);
+}
+function onPointerUp(e){
+  pointerId = null;
+  moveDir.x = 0; moveDir.y = 0;
+}
+
+function getPoint(e){
+  if(e.touches && e.touches.length>0) return {x:e.touches[0].clientX,y:e.touches[0].clientY};
+  return {x:e.clientX,y:e.clientY};
+}
+function calcMoveFrom(cx,cy,rect){
+  // center joystick area at left-bottom corner midpoint
+  const centerX = rect.width*0.25;
+  const centerY = rect.height*0.8;
+  const dx = cx - centerX;
+  const dy = cy - centerY;
+  const d = Math.hypot(dx,dy) || 1;
+  moveDir.x = clamp(dx / (rect.width*0.25), -1, 1);
+  moveDir.y = clamp(dy / (rect.height*0.25), -1, 1);
+}
+
+// action handling (attack/interact)
+function handleActionAtScreen(cx,cy,rect){
+  // map screen coord to world tile
+  const cam = camera();
+  const tx = Math.floor((cx/rect.width)*VIEW_W_TILES) + cam.x;
+  const ty = Math.floor((cy/rect.height)*VIEW_H_TILES) + cam.y;
+  // if on plot and has seed -> plant
+  const p = state.map.home.plots.find(pl => pl.x===tx && pl.y===ty);
+  if(!state.ui.inDungeon && p && !p.crop && state.inventory.seed_wheat>0){
+    p.crop = 'wheat'; p.stage = 0;
+    state.inventory.seed_wheat--;
+    updateUI();
+    return;
+  }
+  // otherwise, attack nearest enemy if in dungeon
+  if(state.ui.inDungeon && state.map.dungeon){
+    const px = state.player.x, py = state.player.y;
+    const m = findMonsterAt(tx,ty);
+    if(m){
+      // attack
+      m.hp -= 3;
+      if(m.hp<=0){ attemptCapture(m); removeMonster(m); }
+      return;
+    }
+  }
+}
+
+// ===== CAMERA =====
+function camera(){
+  // center player where possible
+  let camx = state.player.x - Math.floor(VIEW_W_TILES/2);
+  let camy = state.player.y - Math.floor(VIEW_H_TILES/2);
+  let map = state.ui.inDungeon && state.map.dungeon ? state.map.dungeon : state.map.home;
+  camx = clamp(camx, 0, Math.max(0, map.w - VIEW_W_TILES));
+  camy = clamp(camy, 0, Math.max(0, map.h - VIEW_H_TILES));
+  return {x:camx, y:camy, map};
+}
+
+// ===== RENDER =====
+function draw(){
+  // clear
+  ctx.fillStyle = '#1e1e1e';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  const cam = camera();
+  const map = cam.map;
+
+  // draw tiles
+  for(let y=0;y<VIEW_H_TILES;y++){
+    for(let x=0;x<VIEW_W_TILES;x++){
+      const wx = x+cam.x, wy = y+cam.y;
+      let t = 0;
+      if(wx>=0 && wx<map.w && wy>=0 && wy<map.h) t = map.tiles[wy][wx] || 0;
+      // tile color
+      if(t===0) ctx.fillStyle = '#2b7b2b'; // grass
+      else if(t===1) ctx.fillStyle = '#6b4f2b'; // soil
+      else if(t===2) ctx.fillStyle = '#5a5a5a'; // rock
+      else ctx.fillStyle = '#222';
+      ctx.fillRect(x*TILE, y*TILE, TILE, TILE);
+      // subtle grid
+      ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+      ctx.strokeRect(x*TILE,y*TILE,TILE,TILE);
+    }
+  }
+
+  // draw plots (home only)
+  if(!state.ui.inDungeon){
+    for(const pl of state.map.home.plots){
+      const sx = pl.x - cam.x, sy = pl.y - cam.y;
+      if(sx>=0 && sx<VIEW_W_TILES && sy>=0 && sy<VIEW_H_TILES){
+        // draw plot border
+        ctx.fillStyle = '#4a2a12';
+        ctx.fillRect(sx*TILE+2, sy*TILE+10, TILE-4, TILE-6);
+        if(pl.crop){
+          // draw crop stage as small green rects
+          const stage = pl.stage;
+          ctx.fillStyle = ['#c7ffb3','#8bee7a','#3bdc3b'][clamp(stage,0,2)];
+          ctx.fillRect(sx*TILE+4, sy*TILE+4, TILE-8, TILE-8);
+        }
+      }
+    }
+  }
+
+  // draw items (dungeon items)
+  if(state.ui.inDungeon && state.map.dungeon){
+    for(const it of state.map.dungeon.items){
+      const sx = it.x - cam.x, sy = it.y - cam.y;
+      if(sx>=0 && sx<VIEW_W_TILES && sy>=0 && sy<VIEW_H_TILES){
+        ctx.fillStyle = '#e6c14b';
+        ctx.fillRect(sx*TILE+3, sy*TILE+3, TILE-6, TILE-6);
+      }
+    }
+  }
+
+  // draw monsters (sorted by y)
+  let entities = [];
+  if(state.ui.inDungeon && state.map.dungeon){
+    for(const m of state.map.dungeon.monsters){
+      entities.push({type:'monster',obj:m,y:m.y});
+    }
+  }
+  // include player
+  entities.push({type:'player',obj:state.player,y:state.player.y});
+
+  entities.sort((a,b)=>a.y - b.y);
+  for(const e of entities){
+    if(e.type==='monster'){
+      const m = e.obj;
+      const sx = m.x - cam.x, sy = m.y - cam.y;
+      if(sx>=0 && sx<VIEW_W_TILES && sy>=0 && sy<VIEW_H_TILES){
+        // shadow
+        ctx.fillStyle='rgba(0,0,0,0.35)';
+        ctx.fillRect(sx*TILE+4, sy*TILE+10, TILE-8, 4);
+        // body
+        ctx.fillStyle = '#77c46b';
+        ctx.fillRect(sx*TILE+2, sy*TILE+2, TILE-4, TILE-4);
+      }
+    } else {
+      const p = e.obj;
+      const sx = p.x - cam.x, sy = p.y - cam.y;
+      if(sx>=0 && sx<VIEW_W_TILES && sy>=0 && sy<VIEW_H_TILES){
+        // shadow
+        ctx.fillStyle='rgba(0,0,0,0.45)';
+        ctx.fillRect(sx*TILE+4, sy*TILE+10, TILE-8, 4);
+        // player
+        ctx.fillStyle = '#4db3ff';
+        ctx.fillRect(sx*TILE+2, sy*TILE+2, TILE-4, TILE-4);
+        // draw party small icons above
+        for(let i=0;i<state.party.length;i++){
+          ctx.fillStyle = '#ffa078';
+          ctx.fillRect(sx*TILE + (i*5)-6, sy*TILE-6, 4, 4);
+        }
+      }
+    }
+  }
+
+  // overlay: draw walls top part (if any)
+  for(let y=0;y<VIEW_H_TILES;y++){
+    for(let x=0;x<VIEW_W_TILES;x++){
+      const wx = x+cam.x, wy = y+cam.y;
+      if(wx>=0 && wx<cam.map.w && wy>=0 && wy<cam.map.h){
+        const t = cam.map.tiles[wy][wx];
+        if(t===1){
+          // wall overlay top
+          ctx.fillStyle = '#3f2f2a';
+          ctx.fillRect(x*TILE, y*TILE, TILE, TILE/2);
+        }
+      }
+    }
+  }
+}
+
+// ===== GAME LOGIC =====
+const MOVE_SPEED = 0.08; // tiles per frame
+
+function step(){
+  // move player according to moveDir, simple continuous movement limited by collisions
+  if(Math.abs(moveDir.x)>0.1 || Math.abs(moveDir.y)>0.1){
+    let nx = state.player.x + (moveDir.x * MOVE_SPEED);
+    let ny = state.player.y + (moveDir.y * MOVE_SPEED);
+    // bounds check
+    const map = state.ui.inDungeon && state.map.dungeon ? state.map.dungeon : state.map.home;
+    nx = clamp(nx, 0, map.w-1);
+    ny = clamp(ny, 0, map.h-1);
+    // simple collision: don't step on wall tiles (dungeon)
+    const tx = Math.floor(nx), ty = Math.floor(ny);
+    if(map.tiles[ty] && map.tiles[ty][tx] !== 1){
+      state.player.x = nx; state.player.y = ny;
+    }
+  }
+
+  // simple monster AI: move random occasionally
+  if(state.ui.inDungeon && state.map.dungeon){
+    for(const m of state.map.dungeon.monsters){
+      if(Math.random()<0.02){
+        m.x = clamp(m.x + randInt(-1,1), 1, state.map.dungeon.w-2);
+        m.y = clamp(m.y + randInt(-1,1), 1, state.map.dungeon.h-2);
+      }
+      // if close to player, contact causes player damage
+      if(Math.hypot(m.x - state.player.x, m.y - state.player.y) < 0.9){
+        state.player.hp -= 0.2;
+        if(state.player.hp < 0) state.player.hp = 0;
+      }
+    }
+  }
+
+  // clamp player HP
+  state.player.hp = clamp(Math.round(state.player.hp), 0, state.player.maxHp);
+
+  updateUI();
+}
+
+// ===== MONSTER UTIL =====
+function findMonsterAt(x,y){
+  if(!state.map.dungeon) return null;
+  return state.map.dungeon.monsters.find(m=>m.x===x && m.y===y);
+}
+function removeMonster(m){
+  const idx = state.map.dungeon.monsters.indexOf(m);
+  if(idx>=0) state.map.dungeon.monsters.splice(idx,1);
+}
+function attemptCapture(m){
+  const base = 0.1; // 10%
+  let mult = 1.0;
+  if(state.inventory.trap_egg>0){ mult += 1.0; state.inventory.trap_egg--; } // uses trap
+  const hpFactor = (m.maxHp>0) ? (1 - (m.hp / m.maxHp)) : 0;
+  const chance = clamp(base * mult + hpFactor * 0.4, 0, 0.95);
+  if(Math.random() < chance){
+    // success if party space
+    if(state.party.length < 3){
+      state.party.push({id:m.id, level:1, exp:0});
+      alert('Captured: ' + m.id);
+    } else {
+      alert('Captured but party full. Sent to storage (not implemented).');
+    }
+  } else {
+    // no capture
+  }
+  updateUI();
+}
+
+// ===== DUNGEON FLOW =====
+dungeonBtn.onclick = function(){
+  if(!state.ui.inDungeon){
+    // enter
+    state.map.dungeon = genDungeon(Date.now());
+    // position player at center of dungeon
+    state.player.x = Math.floor(state.map.dungeon.w/2);
+    state.player.y = Math.floor(state.map.dungeon.h/2);
+    state.ui.inDungeon = true;
+    dungeonBtn.textContent = 'Return Home';
+  } else {
+    // return home: increment runCount and grow crops
+    state.ui.inDungeon = false;
+    state.map.dungeon = null;
+    state.time.runCount++;
+    // grow crops one stage per run
+    for(const p of state.map.home.plots){
+      if(p.crop){
+        p.stage += 1;
+        // if stage exceeds threshold, convert to harvestable
+        if((p.crop==='wheat' && p.stage>=3) || (p.crop==='corn' && p.stage>=4) || (p.crop==='berry' && p.stage>=2)){
+          // produce item in inventory for simplicity
+          const item = 'crop_' + p.crop;
+          state.inventory[item] = (state.inventory[item]||0) + 1;
+          p.crop = null;
+          p.stage = 0;
+        }
+      }
+    }
+    dungeonBtn.textContent = 'Enter Dungeon';
+    updateUI();
+  }
+};
+
+// ===== INIT / MAIN LOOP =====
+function loop(){
+  step();
+  draw();
+  requestAnimationFrame(loop);
+}
+updateUI();
+requestAnimationFrame(loop);
+
+// autosave occasionally
+setInterval(()=>{ localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }, 15000);
+
+</script>
+</body>
+</html>
