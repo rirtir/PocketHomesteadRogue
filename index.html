@@ -3,543 +3,317 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Pocket Homestead Rogue — Fixed Prototype (Joystick area fixed)</title>
+<title>Pocket Homestead — Main Map (Prototype)</title>
 <style>
-  html,body{height:100%;margin:0;background:#0b0b0b;color:#ddd;font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP";}
-  #gameWrap{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;min-height:100vh;box-sizing:border-box;padding:8px;}
-  .hud{width:100%;max-width:480px;box-sizing:border-box;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
-  .btn{background:#222;border:1px solid #444;padding:6px 8px;border-radius:6px;color:#eee;touch-action:manipulation}
+  html,body{height:100%;margin:0;background:#0b0b0b;color:#ddd;font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP";}
+  #gameWrap{display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:8px;box-sizing:border-box;}
+  .hud{width:100%;max-width:480px;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
   .small{font-size:12px;color:#bbb}
-  .canvasWrap{width:100%;max-width:480px;flex:0 0 auto;display:flex;justify-content:center;position:relative;}
-  canvas{background:#1b1b1b; image-rendering: pixelated; border-radius:6px; display:block; width:100%; height: calc(100vh - 180px); max-height:640px; touch-action:none;}
-  .bottomUI{width:100%;max-width:480px;display:flex;justify-content:space-between;align-items:center;padding-top:6px;box-sizing:border-box;}
-  .inventory{display:flex;gap:6px;align-items:center;}
-  .slot{width:34px;height:34px;background:#151515;border:1px solid #333;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff}
-  .exportArea{width:100%;max-width:480px;margin-top:6px;}
-  .footerNote{font-size:12px;color:#888;margin-top:4px;}
-
-  /* Overlay UI - enlarged joystick */
-  .joystickBase{
-    position:absolute;
-    left:12px;
-    bottom:12px;
-    width:140px;           /* larger visible area */
-    height:140px;
-    border-radius:50%;
-    background:rgba(20,20,20,0.55);
-    border:2px solid rgba(255,255,255,0.04);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    touch-action:none;
-    -webkit-user-select:none;
-    user-select:none;
-    z-index:30;
-    box-shadow:0 6px 18px rgba(0,0,0,0.6);
-  }
-  .joystickGuide{
-    position:absolute;
-    width:70px;height:70px;border-radius:50%;
-    background:rgba(255,255,255,0.02);
-    border:1px dashed rgba(255,255,255,0.02);
-  }
-  .joystickKnob{
-    position:absolute;
-    width:46px;height:46px;border-radius:50%;
-    background:rgba(255,255,255,0.12);
-    border:1px solid rgba(255,255,255,0.12);
-    transform:translate(-50%,-50%);
-    left:50%; top:50%;
-    touch-action:none;
-  }
-
-  .confirmBtn{
-    position:absolute;
-    right:10px;
-    bottom:12px;
-    min-width:72px;
-    height:72px;
-    border-radius:12px;
-    background:linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.08));
-    border:2px solid rgba(255,255,255,0.06);
-    color:#fff;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-weight:600;
-    font-size:14px;
-    z-index:30;
-    touch-action:manipulation;
-    -webkit-user-select:none;
-    user-select:none;
-    box-shadow:0 8px 22px rgba(0,0,0,0.6);
-  }
-  .confirmBtn:active{ transform: translateY(1px) scale(0.995); }
-
-  .uiLabel{
-    position:absolute;
-    left:12px;
-    bottom:162px;
-    font-size:12px;color:#cfcfcf;opacity:0.9;
-    z-index:29;
-  }
-
-  @media (max-width:420px){
-    .joystickBase{width:110px;height:110px;}
-    .joystickGuide{width:54px;height:54px;}
-    .joystickKnob{width:40px;height:40px;}
-    .confirmBtn{width:64px;height:64px;}
-    .uiLabel{bottom:140px;}
-  }
+  .canvasWrap{width:100%;max-width:480px;position:relative;display:flex;justify-content:center;}
+  canvas{background:#132; image-rendering: pixelated; border-radius:6px; display:block; width:100%; height: calc(100vh - 180px); max-height:640px; touch-action:none;}
+  /* joystick + buttons */
+  .joystickBase{position:absolute;left:12px;bottom:12px;width:140px;height:140px;border-radius:50%;background:rgba(20,20,20,0.55);border:2px solid rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;z-index:30;touch-action:none}
+  .joystickGuide{position:absolute;width:70px;height:70px;border-radius:50%;background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.02)}
+  .joystickKnob{position:absolute;width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.12);transform:translate(-50%,-50%);left:50%;top:50%}
+  .confirmBtn{position:absolute;right:12px;bottom:12px;min-width:72px;height:72px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.08));border:2px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-weight:600;z-index:30;touch-action:manipulation}
+  .invBtn{position:absolute;right:12px;bottom:96px;min-width:56px;height:48px;border-radius:10px;background:rgba(30,30,30,0.6);border:1px solid rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;font-size:13px;z-index:30;touch-action:manipulation}
+  .uiLabel{position:absolute;left:12px;bottom:162px;font-size:12px;color:#cfcfcf;z-index:29}
+  /* inventory modal */
+  .invModal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:90%;max-width:380px;background:#0f0f12;border:1px solid #222;padding:12px;border-radius:8px;box-shadow:0 12px 30px rgba(0,0,0,0.7);z-index:80;display:none}
+  .invGrid{display:flex;flex-wrap:wrap;gap:8px}
+  .invSlot{width:64px;height:64px;background:#151515;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#ddd}
+  .closeInv{margin-top:8px;padding:8px;border-radius:6px;background:#222;border:1px solid #333;color:#eee}
+  @media (max-width:420px){ .joystickBase{width:110px;height:110px} .joystickKnob{width:40px;height:40px} .confirmBtn{width:64px;height:64px} .invBtn{right:12px;bottom:88px} }
 </style>
 </head>
 <body>
-<div id="gameWrap">
-  <div class="hud">
-    <div>
-      <div class="small">HP <span id="hpText">30/30</span></div>
-      <div class="small">Runs: <span id="runCount">0</span></div>
-      <div class="small">Party: <span id="partyText">0/3</span></div>
+  <div id="gameWrap">
+    <div class="hud">
+      <div><div class="small">HP <span id="hpText">30/30</span></div><div class="small">Runs: <span id="runCount">0</span></div></div>
+      <div style="font-size:12px;color:#bbb">Main Map</div>
     </div>
-    <div style="display:flex;gap:6px">
-      <button class="btn" id="saveBtn">Save</button>
-      <button class="btn" id="loadBtn">Load</button>
+
+    <div class="canvasWrap">
+      <canvas id="c" width="144" height="256"></canvas>
+
+      <!-- joystick / UI -->
+      <div class="joystickBase" id="joystickBase">
+        <div class="joystickGuide"></div>
+        <div class="joystickKnob" id="joystickKnob"></div>
+      </div>
+      <div class="uiLabel">左で移動</div>
+
+      <button class="confirmBtn" id="confirmBtn">Confirm</button>
+      <button class="invBtn" id="invBtn">Inventory</button>
     </div>
+
+    <!-- inventory modal -->
+    <div class="invModal" id="invModal" role="dialog" aria-hidden="true">
+      <h3 style="margin:0 0 8px 0;color:#fff">Inventory</h3>
+      <div class="invGrid" id="invGrid"></div>
+      <button class="closeInv" id="closeInv">Close</button>
+    </div>
+
   </div>
-
-  <div class="canvasWrap">
-    <canvas id="c" width="144" height="256"></canvas>
-
-    <!-- Joystick overlay -->
-    <div class="joystickBase" id="joystickBase" aria-hidden="false" role="application">
-      <div class="joystickGuide"></div>
-      <div class="joystickKnob" id="joystickKnob"></div>
-    </div>
-    <div class="uiLabel">左で移動</div>
-
-    <!-- Confirm / action button -->
-    <div class="confirmBtn" id="confirmBtn">Confirm</div>
-  </div>
-
-  <div class="bottomUI">
-    <div class="inventory" id="inventory">
-      <div class="slot" id="slot_seed">Seed x5</div>
-      <div class="slot" id="slot_trap">Trap x1</div>
-    </div>
-    <div style="display:flex;gap:8px">
-      <button class="btn" id="dungeonBtn">Enter Dungeon</button>
-      <button class="btn" id="exportBtn">Export Save</button>
-    </div>
-  </div>
-
-  <div class="exportArea">
-    <textarea id="exportArea" style="width:100%;height:80px;background:#0f0f12;color:#ddd;border:1px solid #222;padding:6px;display:none"></textarea>
-    <div class="footerNote">プレースホルダ描画のプロトタイプです。問題がなければ次に画像差し替えを進めます。</div>
-  </div>
-</div>
 
 <script>
-/* Changes:
- - Joystick input region now matches visible joystickBase bounding rect.
- - desiredDir includes magnitude (0..1) based on knob distance.
- - Canvas taps outside joystickBase are treated as action taps.
- - Visual knob follows desiredDir.
+/* Main map prototype:
+ - Loads assets/map.json
+ - Draws regions (2x2 / 3x3 rectangles) on a small grid
+ - Player moves using joystick (same as prior logic)
+ - Confirm: if player adjacent to any region tile, calls enterRegion(region)
+ - Inventory button toggles modal
 */
 
-// CONFIG
+// canvas / constants
 const TILE = 16;
 const VIEW_W_TILES = 9;
-const VIEW_H_TILES = 16;
+const VIEW_H_TILES = 9; // use square map for main screen
 const CANVAS_W = VIEW_W_TILES * TILE;
 const CANVAS_H = VIEW_H_TILES * TILE;
-const SAVE_KEY = 'pocketHomestead_v1_save';
-
-// DOM
 const canvas = document.getElementById('c');
-canvas.width = CANVAS_W;
-canvas.height = CANVAS_H;
+canvas.width = CANVAS_W; canvas.height = CANVAS_H;
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 
+// UI
 const hpText = document.getElementById('hpText');
 const runCountText = document.getElementById('runCount');
-const partyText = document.getElementById('partyText');
-const saveBtn = document.getElementById('saveBtn');
-const loadBtn = document.getElementById('loadBtn');
-const dungeonBtn = document.getElementById('dungeonBtn');
-const exportBtn = document.getElementById('exportBtn');
-const exportArea = document.getElementById('exportArea');
-const slotSeed = document.getElementById('slot_seed');
-const slotTrap = document.getElementById('slot_trap');
+const confirmBtn = document.getElementById('confirmBtn');
+const invBtn = document.getElementById('invBtn');
+const invModal = document.getElementById('invModal');
+const invGrid = document.getElementById('invGrid');
+const closeInv = document.getElementById('closeInv');
 
 const joystickBase = document.getElementById('joystickBase');
 const joystickKnob = document.getElementById('joystickKnob');
-const confirmBtn = document.getElementById('confirmBtn');
 
-// STATE
+let mapData = null;
+
+// state
 let state = {
-  player: { tx:8, ty:12, x:8, y:12, hp:30, maxHp:30, moving:false },
-  inventory: {seed_wheat:5, trap_egg:1, fertilizer_basic:0},
+  player: { x: 4, y: 7, tx:4, ty:7, moving:false, hp:30, maxHp:30 },
+  inventory: { seed_wheat:5, trap_egg:1 },
   party: [],
-  map: { home:null, dungeon:null },
-  ui: { inDungeon:false },
   time: { runCount:0 }
 };
 
+// util
 const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
 const randInt = (a,b)=>Math.floor(Math.random()*(b-a+1))+a;
 
-function makeHome(){
-  const w=20,h=20;
-  const tiles = new Array(h);
-  for(let y=0;y<h;y++){
-    tiles[y]=new Array(w);
-    for(let x=0;x<w;x++){
-      tiles[y][x] = (Math.random()<0.05?2:(Math.random()<0.25?1:0));
-    }
-  }
-  for(let y=8;y<12;y++) for(let x=6;x<14;x++) tiles[y][x]=0;
-  return {w,h,tiles,plots:[]};
-}
-state.map.home = makeHome();
-state.map.home.plots.push({x:7,y:9,crop:null,stage:0});
-state.map.home.plots.push({x:9,y:9,crop:null,stage:0});
-state.map.home.plots.push({x:11,y:9,crop:null,stage:0});
-
-function genDungeon(seed){
-  const w=16,h=12;
-  const tiles = new Array(h);
-  for(let y=0;y<h;y++){
-    tiles[y] = new Array(w).fill(0);
-  }
-  for(let i=0;i<30;i++){
-    tiles[randInt(1,h-2)][randInt(1,w-2)] = 1;
-  }
-  const monsters=[];
-  for(let i=0;i<8;i++){
-    monsters.push({id:'slime',x:randInt(1,w-2),y:randInt(1,h-2),hp:5,maxHp:5});
-  }
-  const items=[{id:'sample_ore',x:randInt(1,w-2),y:randInt(1,h-2)}];
-  return {w,h,tiles,monsters,items,seed};
-}
-
-// SAVE / LOAD
-function saveGame(){
+// load map json
+async function loadMap(){
   try{
-    localStorage.setItem(SAVE_KEY, JSON.stringify(state));
-    alert('Saved locally.');
-  }catch(e){ alert('Save failed: ' + e.message); }
-}
-function loadGame(){
-  const raw = localStorage.getItem(SAVE_KEY);
-  if(!raw){ alert('No save found.'); return; }
-  try{
-    const obj = JSON.parse(raw);
-    if(!obj.player || !obj.map) { alert('Invalid save.'); return; }
-    state = obj;
-    updateUI();
-    alert('Loaded.');
-  }catch(e){ alert('Load failed: ' + e.message); }
-}
-saveBtn.onclick = saveGame;
-loadBtn.onclick = loadGame;
-exportBtn.onclick = ()=>{ exportArea.style.display = exportArea.style.display==='none'?'block':'none'; exportArea.value = JSON.stringify(state); };
-
-function updateUI(){
-  hpText.textContent = `${Math.round(state.player.hp)}/${state.player.maxHp}`;
-  runCountText.textContent = state.time.runCount;
-  partyText.textContent = `${state.party.length}/3`;
-  slotSeed.textContent = `Seed x${state.inventory.seed_wheat||0}`;
-  slotTrap.textContent = `Trap x${state.inventory.trap_egg||0}`;
+    const res = await fetch('assets/map.json');
+    if(!res.ok) throw new Error('map.json load failed');
+    mapData = await res.json();
+    // if map smaller/bigger than canvas, we assume mapData.width/height == VIEW_W_TILES
+    // build tile->region reverse index
+    buildRegionTiles();
+    // start loop
+    requestAnimationFrame(step);
+  }catch(e){
+    alert('マップ読み込みに失敗しました: ' + e.message + '\n(HTTP サーバー経由で開いてください)');
+  }
 }
 
-// CAMERA & DRAW (unchanged)
-function camera(){
-  const map = (state.ui.inDungeon && state.map.dungeon) ? state.map.dungeon : state.map.home;
-  if(!map) return {x:0,y:0,map:{w:VIEW_W_TILES,h:VIEW_H_TILES,tiles:[]}};
-  let camx = Math.floor(state.player.x) - Math.floor(VIEW_W_TILES/2);
-  let camy = Math.floor(state.player.y) - Math.floor(VIEW_H_TILES/2);
-  camx = clamp(camx, 0, Math.max(0, map.w - VIEW_W_TILES));
-  camy = clamp(camy, 0, Math.max(0, map.h - VIEW_H_TILES));
-  return {x:camx, y:camy, map};
-}
-
-function draw(){
-  ctx.fillStyle = '#1b1b1b';
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-
-  const cam = camera();
-  const map = cam.map;
-  if(!map || !map.tiles) return;
-
-  for(let y=0;y<VIEW_H_TILES;y++){
-    for(let x=0;x<VIEW_W_TILES;x++){
-      const wx = x + cam.x, wy = y + cam.y;
-      let t = 0;
-      if(wx>=0 && wx<map.w && wy>=0 && wy<map.h){
-        const row = map.tiles[wy];
-        t = row ? (row[wx] || 0) : 0;
+// build region tiles list
+function buildRegionTiles(){
+  if(!mapData) return;
+  mapData._tiles = Array.from({length: mapData.height}, ()=>Array(mapData.width).fill(null));
+  mapData.regions.forEach(region=>{
+    for(let yy=0;yy<region.h;yy++){
+      for(let xx=0;xx<region.w;xx++){
+        const gx = region.x + xx, gy = region.y + yy;
+        if(gx>=0 && gx<mapData.width && gy>=0 && gy<mapData.height){
+          mapData._tiles[gy][gx] = region.id;
+        }
       }
-      if(t===0) ctx.fillStyle = '#2b7b2b';
-      else if(t===1) ctx.fillStyle = '#6b4f2b';
-      else if(t===2) ctx.fillStyle = '#5a5a5a';
-      else ctx.fillStyle = '#222';
+    }
+  });
+}
+
+// draw main map
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // background
+  for(let y=0;y<mapData.height;y++){
+    for(let x=0;x<mapData.width;x++){
+      const regionId = mapData._tiles[y][x];
+      if(regionId){
+        const r = mapData.regions.find(rr=>rr.id===regionId);
+        if(r.type === 'farm') ctx.fillStyle = '#2c7b34';
+        else if(r.type === 'dungeon') ctx.fillStyle = '#6b4f3a';
+        else ctx.fillStyle = '#446';
+      } else {
+        ctx.fillStyle = '#274a2b';
+      }
       ctx.fillRect(x*TILE, y*TILE, TILE, TILE);
-      ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+      ctx.strokeStyle = 'rgba(0,0,0,0.08)';
       ctx.strokeRect(x*TILE,y*TILE,TILE,TILE);
     }
   }
 
-  if(!state.ui.inDungeon){
-    const home = state.map.home;
-    if(home && home.plots){
-      for(const pl of home.plots){
-        const sx = pl.x - cam.x, sy = pl.y - cam.y;
-        if(sx>=0 && sx<VIEW_W_TILES && sy>=0 && sy<VIEW_H_TILES){
-          ctx.fillStyle = '#4a2a12';
-          ctx.fillRect(sx*TILE+2, sy*TILE+10, TILE-4, TILE-6);
-          if(pl.crop){
-            const stage = pl.stage;
-            const color = stage<=0 ? '#c7ffb3' : (stage===1? '#8bee7a' : '#3bdc3b');
-            ctx.fillStyle = color;
-            ctx.fillRect(sx*TILE+4, sy*TILE+4, TILE-8, TILE-8);
-          }
-        }
-      }
-    }
-  }
+  // draw region outlines and names
+  mapData.regions.forEach(r=>{
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(r.x*TILE + 1, r.y*TILE + 1, r.w*TILE -2, r.h*TILE -2);
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.font = '10px sans-serif';
+    ctx.fillText(r.name, r.x*TILE + 4, r.y*TILE + 12);
+  });
 
-  if(state.ui.inDungeon && state.map.dungeon && state.map.dungeon.items){
-    for(const it of state.map.dungeon.items){
-      const sx = it.x - cam.x, sy = it.y - cam.y;
-      if(sx>=0 && sx<VIEW_W_TILES && sy>=0 && sy<VIEW_H_TILES){
-        ctx.fillStyle = '#e6c14b';
-        ctx.fillRect(sx*TILE+3, sy*TILE+3, TILE-6, TILE-6);
-      }
-    }
-  }
-
-  let entities = [];
-  if(state.ui.inDungeon && state.map.dungeon){
-    for(const m of state.map.dungeon.monsters) entities.push({type:'monster',o:m,y:m.y});
-  }
-  entities.push({type:'player',o:state.player,y:state.player.y});
-  entities.sort((a,b)=>a.y - b.y);
-  for(const e of entities){
-    if(e.type==='monster'){
-      const m = e.o;
-      const sx = m.x - cam.x, sy = m.y - cam.y;
-      if(sx>=-1 && sx<VIEW_W_TILES && sy>=-1 && sy<VIEW_H_TILES){
-        ctx.fillStyle='rgba(0,0,0,0.35)';
-        ctx.fillRect(sx*TILE+4, sy*TILE+10, TILE-8, 4);
-        ctx.fillStyle = '#77c46b';
-        ctx.fillRect(sx*TILE+2, sy*TILE+2, TILE-4, TILE-4);
-      }
-    } else {
-      const p = e.o;
-      const sx = p.x - cam.x, sy = p.y - cam.y;
-      if(sx>=-1 && sx<VIEW_W_TILES && sy>=-1 && sy<VIEW_H_TILES){
-        ctx.fillStyle='rgba(0,0,0,0.45)';
-        ctx.fillRect(sx*TILE+4, sy*TILE+10, TILE-8, 4);
-        ctx.fillStyle = '#4db3ff';
-        ctx.fillRect(sx*TILE+2, sy*TILE+2, TILE-4, TILE-4);
-        for(let i=0;i<state.party.length;i++){
-          ctx.fillStyle = '#ffa078';
-          ctx.fillRect(sx*TILE + (i*5)-6, sy*TILE-6, 4, 4);
-        }
-      }
-    }
-  }
-
-  for(let y=0;y<VIEW_H_TILES;y++){
-    for(let x=0;x<VIEW_W_TILES;x++){
-      const wx = x+cam.x, wy = y+cam.y;
-      if(wx>=0 && wx<map.w && wy>=0 && wy<map.h){
-        const t = map.tiles[wy][wx];
-        if(t===1){
-          ctx.fillStyle = '#3f2f2a';
-          ctx.fillRect(x*TILE, y*TILE, TILE, TILE/2);
-        }
-      }
-    }
-  }
+  // entities (player)
+  // small shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(state.player.x*TILE+4, state.player.y*TILE+10, TILE-8, 4);
+  // player square
+  ctx.fillStyle = '#4db3ff';
+  ctx.fillRect(state.player.x*TILE+2, state.player.y*TILE+2, TILE-4, TILE-4);
 }
 
-// INPUT / JOYSTICK LOGIC (updated to use joystickBase rect)
-let desiredDir = {x:0,y:0}; // includes magnitude (strength)
+// movement & input (joystick)
+let desiredDir = {x:0,y:0}; // includes strength (-1..1)
 const MOVE_SPEED = 6.0;
+function clientPointFromEvent(e){ if(e.touches && e.touches.length>0) return {x:e.touches[0].clientX, y:e.touches[0].clientY}; if(e.clientX!==undefined) return {x:e.clientX, y:e.clientY}; return null; }
+function pointInJoystickBase(pt){ const r = joystickBase.getBoundingClientRect(); return pt.x>=r.left && pt.x<=r.right && pt.y>=r.top && pt.y<=r.bottom; }
 
-// get client point helper
-function clientPointFromEvent(e){
-  if(e.touches && e.touches.length>0) return {x:e.touches[0].clientX, y:e.touches[0].clientY};
-  if(e.clientX !== undefined) return {x:e.clientX, y:e.clientY};
-  return null;
-}
-
-// Whether a client point is inside joystickBase on screen
-function pointInJoystickBase(pt){
-  const r = joystickBase.getBoundingClientRect();
-  return pt.x >= r.left && pt.x <= r.right && pt.y >= r.top && pt.y <= r.bottom;
-}
-
-// Handle a client point: if inside joystick base => joystick input, else => action tap
 function handleClientPoint(pt){
   const baseRect = joystickBase.getBoundingClientRect();
-  if(pt && pointInJoystickBase(pt)){
-    // compute vector relative to base center
-    const centerX = baseRect.left + baseRect.width / 2;
-    const centerY = baseRect.top + baseRect.height / 2;
-    let dx = pt.x - centerX;
-    let dy = pt.y - centerY;
-    // maximum radius (use guide circle)
+  if(pointInJoystickBase(pt)){
+    const centerX = baseRect.left + baseRect.width/2;
+    const centerY = baseRect.top + baseRect.height/2;
+    let dx = pt.x - centerX, dy = pt.y - centerY;
     const maxR = Math.min(baseRect.width, baseRect.height) * 0.42;
     const dist = Math.hypot(dx,dy);
-    let strength = Math.min(dist / maxR, 1.0); // 0..1
+    let strength = Math.min(dist / maxR, 1.0);
     if(dist > 0.001){
-      dx = dx / dist;
-      dy = dy / dist;
-      desiredDir.x = dx * strength;
-      desiredDir.y = dy * strength;
-    } else {
-      desiredDir.x = 0; desiredDir.y = 0;
-    }
-    // ensure small deadzone
+      dx /= dist; dy /= dist;
+      desiredDir.x = dx * strength; desiredDir.y = dy * strength;
+    } else { desiredDir.x = 0; desiredDir.y = 0; }
     if(Math.hypot(desiredDir.x, desiredDir.y) < 0.12){ desiredDir.x = 0; desiredDir.y = 0; }
   } else {
-    // outside joystick: treat as action tap on canvas area
+    // outside joystick: treat as action tap on canvas
     const rect = canvas.getBoundingClientRect();
-    // ignore if tap is outside canvas (e.g. on UI)
     if(pt.x < rect.left || pt.x > rect.right || pt.y < rect.top || pt.y > rect.bottom) return;
-    const cx = pt.x - rect.left;
-    const cy = pt.y - rect.top;
+    const cx = pt.x - rect.left, cy = pt.y - rect.top;
     handleActionAtScreen(cx, cy, rect);
   }
 }
 
-// old handleActionAtScreen / movement / capture functions (unchanged)
-function handleActionAtScreen(cx,cy,rect){
-  const cam = camera();
-  const tx = Math.floor((cx/rect.width)*VIEW_W_TILES) + cam.x;
-  const ty = Math.floor((cy/rect.height)*VIEW_H_TILES) + cam.y;
-  if(!state.ui.inDungeon){
-    const p = state.map.home.plots.find(pl=>pl.x===tx && pl.y===ty);
-    if(p && !p.crop && state.inventory.seed_wheat>0){
-      p.crop = 'wheat'; p.stage = 0; state.inventory.seed_wheat--; updateUI();
-    }
-  } else {
-    const m = findMonsterAt(tx,ty);
-    if(m){
-      m.hp -= 3;
-      if(m.hp <= 0){ attemptCapture(m); removeMonster(m); }
-    }
-  }
-}
+// canvas handlers
+canvas.addEventListener('touchstart', e=>{ e.preventDefault(); const p=clientPointFromEvent(e); if(p) handleClientPoint(p); }, {passive:false});
+canvas.addEventListener('touchmove', e=>{ e.preventDefault(); const p=clientPointFromEvent(e); if(p) handleClientPoint(p); }, {passive:false});
+canvas.addEventListener('touchend', e=>{ desiredDir.x = 0; desiredDir.y = 0; }, {passive:false});
+canvas.addEventListener('mousedown', e=>{ const p=clientPointFromEvent(e); if(p) handleClientPoint(p); });
+canvas.addEventListener('mousemove', e=>{ if(e.buttons){ const p=clientPointFromEvent(e); if(p) handleClientPoint(p); } });
+canvas.addEventListener('mouseup', e=>{ desiredDir.x = 0; desiredDir.y = 0; });
+
+// joystick visual & overlay handling (drag on visible base)
+let joystickActive=false;
+joystickBase.addEventListener('touchstart', e=>{ e.preventDefault(); joystickActive=true; const p=clientPointFromEvent(e); if(p) handleClientPoint(p); }, {passive:false});
+joystickBase.addEventListener('touchmove', e=>{ e.preventDefault(); const p=clientPointFromEvent(e); if(p) handleClientPoint(p); }, {passive:false});
+joystickBase.addEventListener('touchend', e=>{ e.preventDefault(); joystickActive=false; desiredDir.x=0; desiredDir.y=0; }, {passive:false});
+joystickBase.addEventListener('mousedown', e=>{ e.preventDefault(); joystickActive=true; const p=clientPointFromEvent(e); if(p) handleClientPoint(p); });
+window.addEventListener('mousemove', e=>{ if(!joystickActive) return; const p=clientPointFromEvent(e); if(p) handleClientPoint(p); });
+window.addEventListener('mouseup', e=>{ if(joystickActive){ joystickActive=false; desiredDir.x=0; desiredDir.y=0; } });
+
+// movement attempt (discrete tile grid)
 function tryStartMove(){
   if(state.player.moving) return;
-  const dx = desiredDir.x; const dy = desiredDir.y;
+  const dx = desiredDir.x, dy = desiredDir.y;
   if(Math.hypot(dx,dy) < 0.35) return;
   let mx = 0, my = 0;
   if(Math.abs(dx) > Math.abs(dy)) mx = dx > 0 ? 1 : -1;
   else my = dy > 0 ? 1 : -1;
-  const map = (state.ui.inDungeon && state.map.dungeon) ? state.map.dungeon : state.map.home;
-  if(!map) return;
   const fromX = Math.floor(state.player.x), fromY = Math.floor(state.player.y);
-  const tx = clamp(fromX + mx, 0, map.w-1);
-  const ty = clamp(fromY + my, 0, map.h-1);
-  const row = map.tiles[ty];
-  const tileVal = row ? row[tx] : 0;
-  if(tileVal === 1) return;
+  const tx = clamp(fromX + mx, 0, mapData.width-1);
+  const ty = clamp(fromY + my, 0, mapData.height-1);
+  // check passable: forbids leaving map
   state.player.tx = tx; state.player.ty = ty; state.player.moving = true;
 }
 
-function findMonsterAt(x,y){
-  if(!state.map.dungeon) return null;
-  return state.map.dungeon.monsters.find(m=>m.x===x && m.y===y);
-}
-function removeMonster(m){
-  if(!state.map.dungeon) return;
-  const idx = state.map.dungeon.monsters.indexOf(m);
-  if(idx>=0) state.map.dungeon.monsters.splice(idx,1);
-}
-function attemptCapture(m){
-  const base = 0.1;
-  let mult = 1.0;
-  if(state.inventory.trap_egg>0){ mult += 1.0; state.inventory.trap_egg--; }
-  const hpFactor = (m.maxHp>0) ? (1 - (m.hp / m.maxHp)) : 0;
-  const chance = clamp(base * mult + hpFactor * 0.4, 0, 0.95);
-  if(Math.random() < chance){
-    if(state.party.length < 3){
-      state.party.push({id:m.id, level:1, exp:0});
-      alert('Captured: ' + m.id);
-    } else alert('Captured but party is full.');
-  }
-  updateUI();
-}
-
-// Canvas pointer handlers now dispatch based on joystick visible rect
-canvas.addEventListener('touchstart', function(e){ e.preventDefault(); const p = clientPointFromEvent(e); if(p) handleClientPoint(p); }, {passive:false});
-canvas.addEventListener('touchmove', function(e){ e.preventDefault(); const p = clientPointFromEvent(e); if(p) handleClientPoint(p); }, {passive:false});
-canvas.addEventListener('touchend', function(e){ e.preventDefault(); desiredDir.x = 0; desiredDir.y = 0; }, {passive:false});
-canvas.addEventListener('mousedown', function(e){ const p = clientPointFromEvent(e); if(p) handleClientPoint(p); }, {passive:false});
-canvas.addEventListener('mousemove', function(e){ if(e.buttons){ const p = clientPointFromEvent(e); if(p) handleClientPoint(p); } }, {passive:false});
-canvas.addEventListener('mouseup', function(e){ desiredDir.x = 0; desiredDir.y = 0; }, {passive:false});
-
-// Overlay joystick handlers (so dragging directly on the visible base works too)
-let joystickActive = false;
-joystickBase.addEventListener('touchstart', function(e){ e.preventDefault(); joystickActive = true; const p = clientPointFromEvent(e); if(p) handleClientPoint(p); }, {passive:false});
-joystickBase.addEventListener('touchmove', function(e){ e.preventDefault(); const p = clientPointFromEvent(e); if(p) handleClientPoint(p); }, {passive:false});
-joystickBase.addEventListener('touchend', function(e){ e.preventDefault(); joystickActive = false; desiredDir.x = 0; desiredDir.y = 0; }, {passive:false});
-joystickBase.addEventListener('mousedown', function(e){ e.preventDefault(); joystickActive = true; const p = clientPointFromEvent(e); if(p) handleClientPoint(p); });
-window.addEventListener('mousemove', function(e){ if(!joystickActive) return; const p = clientPointFromEvent(e); if(p) handleClientPoint(p); });
-window.addEventListener('mouseup', function(e){ if(joystickActive){ joystickActive = false; desiredDir.x = 0; desiredDir.y = 0; } });
-
-// Confirm button: do action at player's tile
-confirmBtn.addEventListener('click', function(e){
-  e.preventDefault(); e.stopPropagation();
-  const rect = canvas.getBoundingClientRect();
-  const cam = camera();
-  const playerScreenX = (state.player.x - cam.x + 0.5);
-  const playerScreenY = (state.player.y - cam.y + 0.5);
-  const cx = (playerScreenX / VIEW_W_TILES) * rect.width;
-  const cy = (playerScreenY / VIEW_H_TILES) * rect.height;
-  handleActionAtScreen(cx, cy, rect);
-});
-
-// Dungeon flow
-dungeonBtn.onclick = function(){
-  if(!state.ui.inDungeon){
-    state.map.dungeon = genDungeon(Date.now());
-    state.ui.inDungeon = true;
-    state.player.x = Math.floor(state.map.dungeon.w/2);
-    state.player.y = Math.floor(state.map.dungeon.h/2);
-    state.player.tx = Math.floor(state.player.x);
-    state.player.ty = Math.floor(state.player.y);
-    dungeonBtn.textContent = 'Return Home';
+// action tap on canvas (plant/inspect) — for main screen we'll use a simple info popup
+function handleActionAtScreen(cx,cy,rect){
+  const tx = Math.floor((cx/rect.width) * mapData.width);
+  const ty = Math.floor((cy/rect.height) * mapData.height);
+  const regionId = mapData._tiles[ty][tx];
+  if(regionId){
+    const region = mapData.regions.find(r=>r.id===regionId);
+    alert('この領域: ' + region.name + ' (' + region.type + ')');
   } else {
-    state.ui.inDungeon = false;
-    state.map.dungeon = null;
-    state.time.runCount++;
-    for(const p of state.map.home.plots){
-      if(p.crop){
-        p.stage += 1;
-        if((p.crop==='wheat' && p.stage>=3) || (p.crop==='corn' && p.stage>=4) || (p.crop==='berry' && p.stage>=2)){
-          const item = 'crop_' + p.crop;
-          state.inventory[item] = (state.inventory[item]||0) + 1;
-          p.crop = null; p.stage = 0;
-        }
+    alert('空き地です');
+  }
+}
+
+// Confirm behavior: if player adjacent to any tile of region, enter it
+function confirmAction(){
+  if(!mapData) return;
+  // find adjacent regions
+  const px = Math.floor(state.player.x), py = Math.floor(state.player.y);
+  const adj = [];
+  for(const r of mapData.regions){
+    // check if any tile of region is adjacent (manhattan dist 1)
+    for(let yy=r.y; yy<r.y + r.h; yy++){
+      for(let xx=r.x; xx<r.x + r.w; xx++){
+        const d = Math.abs(xx - px) + Math.abs(yy - py);
+        if(d === 1) adj.push(r);
       }
     }
-    dungeonBtn.textContent = 'Enter Dungeon';
-    updateUI();
   }
-};
+  if(adj.length === 0){
+    // nothing adjacent
+    // optional: nearest region within distance 2?
+    alert('近くに入れるエリアがありません。エリアに隣接して Confirm を押してください。');
+    return;
+  }
+  // take first adjacent (or prefer dungeon over farm if both)
+  let chosen = adj[0];
+  const dgn = adj.find(a=>a.type==='dungeon');
+  if(dgn) chosen = dgn;
+  enterRegion(chosen);
+}
 
-// GAME LOOP
+// region entry handlers
+function enterRegion(region){
+  if(region.type === 'farm'){
+    // for now just show a message; later replace with farm UI / overlay
+    alert('拠点へ入ります: ' + region.name);
+    // TODO: open farm overlay / zoom in / farm UI
+  } else if(region.type === 'dungeon'){
+    // navigate to dungeon page with query params
+    const seed = Date.now();
+    window.location.href = `dungeon.html?region=${encodeURIComponent(region.id)}&seed=${seed}`;
+  } else {
+    alert('Enter region: ' + region.name);
+  }
+}
+
+// confirm button binding
+confirmBtn.addEventListener('click', e=>{ e.preventDefault(); confirmAction(); });
+// inventory
+invBtn.addEventListener('click', e=>{ e.preventDefault(); openInventory(); });
+closeInv.addEventListener('click', e=>{ invModal.style.display='none'; invModal.setAttribute('aria-hidden','true'); });
+function openInventory(){
+  invGrid.innerHTML = '';
+  for(const k in state.inventory){
+    const node = document.createElement('div');
+    node.className = 'invSlot';
+    node.textContent = `${k.replace('seed_','seed ')} x${state.inventory[k]}`;
+    invGrid.appendChild(node);
+  }
+  invModal.style.display='block';
+  invModal.setAttribute('aria-hidden','false');
+}
+
+// game loop
 let lastTime = performance.now();
 function step(now){
-  const dt = (now - lastTime) / 1000; lastTime = now;
+  const dt = (now - lastTime)/1000; lastTime = now;
   tryStartMove();
-
   if(state.player.moving){
     const tx = state.player.tx, ty = state.player.ty;
     const speed = MOVE_SPEED * dt;
@@ -551,49 +325,35 @@ function step(now){
       state.player.x += (dx/dist)*speed;
       state.player.y += (dy/dist)*speed;
     }
-  } else {
-    if(state.player.hp < state.player.maxHp) state.player.hp = Math.min(state.player.maxHp, state.player.hp + 0.01);
   }
-
-  if(state.ui.inDungeon && state.map.dungeon){
-    for(const m of state.map.dungeon.monsters){
-      if(Math.random() < 0.02){
-        const nx = clamp(m.x + randInt(-1,1), 1, state.map.dungeon.w-2);
-        const ny = clamp(m.y + randInt(-1,1), 1, state.map.dungeon.h-2);
-        if(state.map.dungeon.tiles[ny][nx] !== 1){
-          m.x = nx; m.y = ny;
-        }
-      }
-      if(Math.hypot(m.x - state.player.x, m.y - state.player.y) < 0.9){
-        state.player.hp -= 0.25;
-      }
-    }
-  }
-
-  state.player.hp = clamp(Math.round(state.player.hp*100)/100, 0, state.player.maxHp);
 
   updateUI();
   draw();
   updateJoystickVisual();
   requestAnimationFrame(step);
 }
-updateUI();
-requestAnimationFrame(step);
 
-// autosave
-setInterval(()=>{ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }catch(e){} }, 15000);
+function updateUI(){
+  hpText.textContent = `${Math.round(state.player.hp)}/${state.player.maxHp}`;
+  runCountText.textContent = state.time.runCount;
+}
 
-// Joystick visual update: position knob according to desiredDir vector & base size
+// joystick visual
 function updateJoystickVisual(){
   const baseRect = joystickBase.getBoundingClientRect();
   const maxOffset = Math.min(baseRect.width, baseRect.height) * 0.36;
-  // desiredDir already encodes direction * strength (0..1)
   const offsetX = desiredDir.x * maxOffset;
   const offsetY = desiredDir.y * maxOffset;
-  // convert to percent relative to base
   joystickKnob.style.left = `${50 + (offsetX / baseRect.width * 100)}%`;
-  joystickKnob.style.top = `${50 + (offsetY / baseRect.height * 100)}%`;
+  joystickKnob.style.top  = `${50 + (offsetY / baseRect.height * 100)}%`;
 }
+
+// helpers for findMonster etc (not used on main screen but kept for parity)
+function findMonsterAt(x,y){ return null; }
+function attemptCapture(){}
+
+// start
+loadMap();
 </script>
 </body>
 </html>
