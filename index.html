@@ -3,27 +3,27 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Pocket Homestead — Main Map (Camera fixed-size)</title>
+<title>Pocket Homestead — Main Map (Fixed layout)</title>
 <style>
   html,body{height:100%;margin:0;background:#0b0b0b;color:#ddd;font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP";}
   #gameWrap{display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:8px;box-sizing:border-box;}
   .hud{width:100%;max-width:480px;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
   .small{font-size:12px;color:#bbb}
-  .canvasWrap{width:100%;max-width:480px;position:relative;display:flex;justify-content:center;}
-  /* 固定サイズのキャンバス（CSSでサイズを固定） */
-  canvas{background:#132; border-radius:6px; display:block; width:144px; height:256px; touch-action:none; image-rendering:pixelated;}
-  .joystickBase{position:absolute;left:12px;bottom:12px;width:140px;height:140px;border-radius:50%;background:rgba(20,20,20,0.55);border:2px solid rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;z-index:30;touch-action:none}
-  .joystickGuide{position:absolute;width:70px;height:70px;border-radius:50%;background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.02)}
-  .joystickKnob{position:absolute;width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.12);transform:translate(-50%,-50%);left:50%;top:50%}
+  .canvasWrap{width:100%;max-width:480px;position:relative;display:flex;justify-content:center;} /* height set by JS */
+  /* canvas: logical resolution 144x256, displayed size computed in JS */
+  canvas{background:#132; border-radius:6px; display:block; touch-action:none; image-rendering:pixelated;}
+  .joystickBase{position:absolute;left:12px;bottom:12px;width:120px;height:120px;border-radius:50%;background:rgba(20,20,20,0.55);border:2px solid rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;z-index:30;touch-action:none}
+  .joystickGuide{position:absolute;width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.02)}
+  .joystickKnob{position:absolute;width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.12);transform:translate(-50%,-50%);left:50%;top:50%}
   .confirmBtn{position:absolute;right:12px;bottom:12px;min-width:72px;height:72px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.08));border:2px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-weight:600;z-index:30;touch-action:manipulation}
   .invBtn{position:absolute;right:12px;bottom:96px;min-width:56px;height:48px;border-radius:10px;background:rgba(30,30,30,0.6);border:1px solid rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;font-size:13px;z-index:30;touch-action:manipulation}
-  .uiLabel{position:absolute;left:12px;bottom:162px;font-size:12px;color:#cfcfcf;z-index:29}
+  .uiLabel{position:absolute;left:12px;bottom:140px;font-size:12px;color:#cfcfcf;z-index:29}
   .invModal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:90%;max-width:380px;background:#0f0f12;border:1px solid #222;padding:12px;border-radius:8px;box-shadow:0 12px 30px rgba(0,0,0,0.7);z-index:80;display:none}
   .invGrid{display:flex;flex-wrap:wrap;gap:8px}
   .invSlot{width:64px;height:64px;background:#151515;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#ddd}
   .closeInv{margin-top:8px;padding:8px;border-radius:6px;background:#222;border:1px solid #333;color:#eee}
   .toast{position:absolute;left:50%;transform:translateX(-50%);top:8px;background:rgba(0,0,0,0.7);color:#fff;padding:6px 10px;border-radius:6px;font-size:13px;z-index:90;display:none}
-  @media (max-width:420px){ .joystickBase{width:110px;height:110px} .joystickKnob{width:40px;height:40px} .confirmBtn{width:64px;height:64px} .invBtn{right:12px;bottom:88px} .uiLabel{bottom:140px} }
+  @media (max-width:420px){ .joystickBase{width:100px;height:100px} .joystickKnob{width:36px;height:36px} .confirmBtn{width:64px;height:64px} .invBtn{bottom:88px} .uiLabel{bottom:120px} }
 </style>
 </head>
 <body>
@@ -33,8 +33,8 @@
       <div style="font-size:12px;color:#bbb">Main Map</div>
     </div>
 
-    <div class="canvasWrap">
-      <!-- 固定論理解像度: 144 x 256 (9 x 16 tiles @16px) -->
+    <div class="canvasWrap" id="canvasWrap">
+      <!-- logical canvas resolution (set as attributes) -->
       <canvas id="c" width="144" height="256"></canvas>
 
       <div class="joystickBase" id="joystickBase"><div class="joystickGuide"></div><div class="joystickKnob" id="joystickKnob"></div></div>
@@ -53,54 +53,67 @@
   </div>
 
 <script>
-/* Fixed-size canvas (144x256) + camera follow + map-edge walls + spawn at region entrance */
+/* Layout + DPR + camera-follow + joystick: displays canvas to fill available vertical space,
+   keeps logical resolution 144x256 for game logic, and positions joystick at canvas bottom-left.
+*/
 
-const TILE = 16;
-const VIEW_W_TILES = 9;   // logical view in tiles (width)
-const VIEW_H_TILES = 16;  // logical view in tiles (height)
-const CANVAS_W = VIEW_W_TILES * TILE;  // 144
-const CANVAS_H = VIEW_H_TILES * TILE;  // 256
-
+const LOGICAL_W = 144;
+const LOGICAL_H = 256;
 const canvas = document.getElementById('c');
+const canvasWrap = document.getElementById('canvasWrap');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 
-// UI
-const hpText = document.getElementById('hpText');
-const runCountText = document.getElementById('runCount');
+const joystickBase = document.getElementById('joystickBase');
+const joystickKnob = document.getElementById('joystickKnob');
 const confirmBtn = document.getElementById('confirmBtn');
 const invBtn = document.getElementById('invBtn');
 const invModal = document.getElementById('invModal');
 const invGrid = document.getElementById('invGrid');
 const closeInv = document.getElementById('closeInv');
-const joystickBase = document.getElementById('joystickBase');
-const joystickKnob = document.getElementById('joystickKnob');
 const toast = document.getElementById('toast');
+const hud = document.querySelector('.hud');
 
+// simple state (kept minimal)
 let mapData = null;
-
-// game state
-let state = {
-  player: { x:0, y:0, tx:0, ty:0, moving:false, hp:30, maxHp:30 },
-  inventory: { seed_wheat:5, trap_egg:1 },
-  party: [],
-  time: { runCount:0 }
-};
-
+let state = { player:{x:0,y:0,tx:0,ty:0,moving:false,hp:30,maxHp:30}, inventory:{seed_wheat:5,trap_egg:1}, time:{runCount:0} };
 const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
 
-// DPR handling: scale drawing so canvas is sharp while keeping CSS size fixed
-function applyDPR(){
+// compute and apply layout so canvas fills available vertical space (within max width)
+function layoutCanvas(){
+  // available vertical space: window height minus hud height and small margin
+  const hudH = hud.getBoundingClientRect().height || 48;
+  const availableH = Math.max(120, window.innerHeight - hudH - 24); // don't go too small
+  // limit to a sensible max (matching earlier max-height behavior)
+  const displayH = Math.min(availableH, 640);
+  // compute width maintaining aspect ratio
+  let displayW = Math.round(displayH * (LOGICAL_W / LOGICAL_H));
+  const maxW = 480;
+  if(displayW > maxW){
+    displayW = maxW;
+    // recompute height to maintain aspect
+    // note: prefer full vertical; but respect max width
+    // recalc displayH accordingly
+    // keep displayH unchanged if user wants full vertical — here clamp by width
+  }
+  // set canvas CSS display size and wrapper height so overlays align to canvas bottom
+  canvas.style.width = displayW + 'px';
+  canvas.style.height = displayH + 'px';
+  canvasWrap.style.height = displayH + 'px';
+
+  // scale internal buffer for DPR
   const dpr = window.devicePixelRatio || 1;
-  // canvas.width/height already set in markup to logical pixels; scale internal buffer
-  canvas.style.width = CANVAS_W + 'px';
-  canvas.style.height = CANVAS_H + 'px';
-  canvas.width = CANVAS_W * dpr;
-  canvas.height = CANVAS_H * dpr;
-  ctx.setTransform(dpr,0,0,dpr,0,0);
+  canvas.width = Math.round(displayW * dpr);
+  canvas.height = Math.round(displayH * dpr);
+  // set transform so drawing can use logical coordinates (LOGICAL_W x LOGICAL_H)
+  const scaleX = canvas.width / LOGICAL_W;
+  const scaleY = canvas.height / LOGICAL_H;
+  ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
 }
-applyDPR();
-window.addEventListener('resize', ()=>{ applyDPR(); }); // keep sharp on rotate
+
+// call initially and on resize
+window.addEventListener('resize', ()=>{ layoutCanvas(); draw(); updateJoystickVisual(); });
+layoutCanvas();
 
 // toast helper
 let toastTimer = null;
@@ -111,219 +124,121 @@ function showToast(msg, ms=1400){
   toastTimer = setTimeout(()=>{ toast.style.display='none'; toastTimer=null; }, ms);
 }
 
-// load map JSON
+// --- MAP LOADING (same map.json path) ---
 async function loadMap(){
   try{
     const res = await fetch('assets/map.json');
     if(!res.ok) throw new Error('map.json load failed');
     mapData = await res.json();
-    // safety: ensure tiles array size matches width/height (if not, pad with walls)
     normalizeMap();
-    // overlay region tiles from regions[] and ensure entrances are road
     buildRegionTilesAndEntrances();
-    // set player spawn to farm entry if available
-    setPlayerSpawnFromRegion('farm');
+    spawnAtFarmEntrance(); // spawn at farm entrance as requested
     requestAnimationFrame(step);
   }catch(e){
-    showToast('マップ読み込み失敗（HTTPで開いてください）', 4000);
+    showToast('マップ読み込み失敗: HTTPで開いてください',4000);
     console.error(e);
   }
 }
-
-// Ensure mapData.tiles has correct dimensions
 function normalizeMap(){
   if(!mapData.tiles) mapData.tiles = Array.from({length: mapData.height}, ()=>Array(mapData.width).fill(0));
-  // pad rows/cols if needed
   for(let y=0;y<mapData.height;y++){
     if(!mapData.tiles[y]) mapData.tiles[y] = Array(mapData.width).fill(0);
-    for(let x=0;x<mapData.width;x++){
-      if(typeof mapData.tiles[y][x] !== 'number') mapData.tiles[y][x] = 0;
-    }
+    for(let x=0;x<mapData.width;x++) if(typeof mapData.tiles[y][x] !== 'number') mapData.tiles[y][x] = 0;
   }
 }
-
-// mark region tiles and ensure entrances are passable (road)
 function buildRegionTilesAndEntrances(){
   mapData._tiles = mapData.tiles.map(r => r.slice());
   if(Array.isArray(mapData.regions)){
     mapData.regions.forEach(region=>{
-      for(let yy=0; yy<region.h; yy++){
-        for(let xx=0; xx<region.w; xx++){
+      for(let yy=0;yy<region.h;yy++){
+        for(let xx=0;xx<region.w;xx++){
           const gx = region.x + xx, gy = region.y + yy;
           if(gx>=0 && gx<mapData.width && gy>=0 && gy<mapData.height){
-            // region tile: 2 for farm, 3 for dungeon (preserve road if present is fine)
-            const marker = (region.type==='farm')?2:(region.type==='dungeon'?3:2);
-            mapData._tiles[gy][gx] = marker;
+            mapData._tiles[gy][gx] = (region.type==='farm'?2:(region.type==='dungeon'?3:2));
           }
         }
       }
-      // ensure entrance coords are valid and set to road (1)
       if(region.entrance){
         const ex = region.entrance.x, ey = region.entrance.y;
         if(ex>=0 && ex<mapData.width && ey>=0 && ey<mapData.height){
-          mapData._tiles[ey][ex] = 1;
+          mapData._tiles[ey][ex] = 1; // make entrance road
         }
       }
     });
   }
 }
-
-// set player spawn from first region of given type (e.g., 'farm')
-function setPlayerSpawnFromRegion(type){
+function spawnAtFarmEntrance(){
   if(!mapData || !mapData.regions) return;
-  const r = mapData.regions.find(rr=>rr.type===type);
-  if(r && r.entrance){
-    state.player.x = r.entrance.x;
-    state.player.y = r.entrance.y;
-    state.player.tx = state.player.x;
-    state.player.ty = state.player.y;
-    return;
+  const farm = mapData.regions.find(r=>r.type==='farm');
+  if(farm && farm.entrance){ state.player.x = farm.entrance.x; state.player.y = farm.entrance.y; state.player.tx = state.player.x; state.player.ty = state.player.y; }
+  else { // fallback: first passable tile
+    for(let y=0;y<mapData.height;y++){ for(let x=0;x<mapData.width;x++){ const t = mapData._tiles[y][x]; if(t===1||t===2||t===3){ state.player.x=x;state.player.y=y;state.player.tx=x;state.player.ty=y; return } } }
   }
-  // fallback: place at center of map in a passable tile
-  for(let y=0;y<mapData.height;y++){
-    for(let x=0;x<mapData.width;x++){
-      const t = mapData._tiles[y][x];
-      if(t === 1 || t === 2 || t===3){
-        state.player.x = x; state.player.y = y; state.player.tx = x; state.player.ty = y;
-        return;
-      }
-    }
-  }
-  // last resort: (0,0)
-  state.player.x = 0; state.player.y = 0; state.player.tx = 0; state.player.ty = 0;
 }
 
-// CAMERA: compute top-left tile (camX, camY) so player appears centered if possible
+// camera: keep player centered where possible
 function camera(){
   const mapW = mapData.width, mapH = mapData.height;
-  // center player
-  let camx = Math.floor(state.player.x) - Math.floor(VIEW_W_TILES/2) + 0;
-  let camy = Math.floor(state.player.y) - Math.floor(VIEW_H_TILES/2) + 0;
+  let camx = Math.floor(state.player.x) - Math.floor((LOGICAL_W / 16) / 2); // careful: LOGICAL_W = tiles*16
+  // simpler: use tile counts (view tiles)
+  const VIEW_W_TILES = LOGICAL_W / 16; // 9
+  const VIEW_H_TILES = LOGICAL_H / 16; // 16
+  camx = Math.floor(state.player.x) - Math.floor(VIEW_W_TILES/2);
+  let camy = Math.floor(state.player.y) - Math.floor(VIEW_H_TILES/2);
   camx = clamp(camx, 0, Math.max(0, mapW - VIEW_W_TILES));
   camy = clamp(camy, 0, Math.max(0, mapH - VIEW_H_TILES));
-  return {x:camx, y:camy};
+  return {x:camx, y:camy, vw:VIEW_W_TILES, vh:VIEW_H_TILES};
 }
 
-// DRAW: draw tiles relative to camera; out-of-bounds -> wall
+// draw using logical coordinates (0..LOGICAL_W .. LOGICAL_H)
 function draw(){
   if(!mapData) return;
-  ctx.clearRect(0,0,CANVAS_W, CANVAS_H);
+  ctx.clearRect(0,0,LOGICAL_W, LOGICAL_H);
   const cam = camera();
-  for(let vy=0; vy<VIEW_H_TILES; vy++){
-    for(let vx=0; vx<VIEW_W_TILES; vx++){
+  for(let vy=0; vy<cam.vh; vy++){
+    for(let vx=0; vx<cam.vw; vx++){
       const wx = vx + cam.x, wy = vy + cam.y;
-      let t = 0; // default wall (out of bounds)
-      if(wx >= 0 && wx < mapData.width && wy >=0 && wy < mapData.height){
-        t = mapData._tiles[wy][wx];
-      } else {
-        t = 0;
-      }
-      // draw based on t
-      if(t === 1){ ctx.fillStyle = '#6b5a3c'; }        // road
-      else if(t === 2){ ctx.fillStyle = '#2c7b34'; }   // farm region
-      else if(t === 3){ ctx.fillStyle = '#6b4f3a'; }   // dungeon region
-      else { ctx.fillStyle = '#111'; }                 // wall / out-of-bounds -> dark
-      ctx.fillRect(vx*TILE, vy*TILE, TILE, TILE);
+      let t = 0;
+      if(wx>=0 && wx<mapData.width && wy>=0 && wy<mapData.height) t = mapData._tiles[wy][wx];
+      else t = 0;
+      if(t===1) ctx.fillStyle = '#6b5a3c';
+      else if(t===2) ctx.fillStyle = '#2c7b34';
+      else if(t===3) ctx.fillStyle = '#6b4f3a';
+      else ctx.fillStyle = '#111';
+      // each tile is 16 logical px
+      ctx.fillRect(vx*16, vy*16, 16, 16);
       ctx.strokeStyle = 'rgba(0,0,0,0.06)';
-      ctx.strokeRect(vx*TILE, vy*TILE, TILE, TILE);
+      ctx.strokeRect(vx*16, vy*16, 16, 16);
     }
   }
-  // region outlines + names
+  // region outlines
   for(const r of mapData.regions){
-    // only draw those inside camera view partially
     const rx = r.x - cam.x, ry = r.y - cam.y;
-    if(rx + r.w < 0 || ry + r.h < 0 || rx >= VIEW_W_TILES || ry >= VIEW_H_TILES) continue;
+    if(rx + r.w < 0 || ry + r.h < 0 || rx >= cam.vw || ry >= cam.vh) continue;
     ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(rx*TILE + 1, ry*TILE + 1, r.w*TILE - 2, r.h*TILE - 2);
+    ctx.strokeRect(rx*16 + 1, ry*16 + 1, r.w*16 - 2, r.h*16 - 2);
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.font = '10px sans-serif';
-    ctx.fillText(r.name, rx*TILE + 4, ry*TILE + 12);
+    ctx.fillText(r.name, rx*16 + 4, ry*16 + 12);
   }
-
   // draw player relative to camera
-  const px = (state.player.x - cam.x) * TILE;
-  const py = (state.player.y - cam.y) * TILE;
-  // small shadow
-  ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  ctx.fillRect(px + 4, py + 10, TILE-8, 4);
-  // player
-  ctx.fillStyle = '#4db3ff';
-  ctx.fillRect(px + 2, py + 2, TILE-4, TILE-4);
+  const px = (state.player.x - cam.x) * 16;
+  const py = (state.player.y - cam.y) * 16;
+  ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(px+4, py+10, 8, 4);
+  ctx.fillStyle = '#4db3ff'; ctx.fillRect(px+2, py+2, 12, 12);
 }
 
-// INPUT: joystick + tap/confirm handling (same logic, but canvas fixed)
-let desiredDir = {x:0,y:0}; // direction * strength
-let pointerActive = false;
-let potentialTap = null;
-let joystickActive = false;
+// joystick/input (kept same corrected behavior)
+let desiredDir = {x:0,y:0};
+let pointerActive=false, potentialTap=null, joystickActive=false;
+function clientPoint(e){ if(e.touches && e.touches.length>0) return {x:e.touches[0].clientX, y:e.touches[0].clientY}; if(e.clientX!==undefined) return {x:e.clientX, y:e.clientY}; return null; }
+function pointInJoystickBase(pt){ const r = joystickBase.getBoundingClientRect(); return pt.x>=r.left && pt.x<=r.right && pt.y>=r.top && pt.y<=r.bottom; }
+function onPointerStart(e){ e.preventDefault(); const p = clientPoint(e); if(!p) return; pointerActive=true; if(pointInJoystickBase(p)){ joystickActive=true; updateJoystickFromPoint(p); } else { potentialTap={x:p.x,y:p.y,start:performance.now(),moved:false}; } }
+function onPointerMove(e){ if(!pointerActive) return; const p = clientPoint(e); if(!p) return; if(joystickActive) updateJoystickFromPoint(p); else if(potentialTap){ const dx=p.x-potentialTap.x, dy=p.y-potentialTap.y; if(Math.hypot(dx,dy) > 8) potentialTap.moved=true; } }
+function onPointerEnd(e){ const p = clientPoint(e); if(joystickActive){ joystickActive=false; desiredDir.x=0; desiredDir.y=0; } else if(potentialTap){ const dt = performance.now()-potentialTap.start; if(!potentialTap.moved && dt<600 && p){ const rect = canvas.getBoundingClientRect(); if(p.x>=rect.left && p.x<=rect.right && p.y>=rect.top && p.y<=rect.bottom){ const cx = p.x - rect.left, cy = p.y - rect.top; handleActionAtScreen(cx,cy,rect); } } potentialTap=null; } pointerActive=false; }
+function updateJoystickFromPoint(pt){ const baseRect = joystickBase.getBoundingClientRect(); const cx = baseRect.left + baseRect.width/2, cy = baseRect.top + baseRect.height/2; let dx = pt.x-cx, dy = pt.y-cy; const dist = Math.hypot(dx,dy), maxR = Math.min(baseRect.width, baseRect.height)*0.42; const strength = Math.min(dist/maxR,1.0); if(dist>0.001){ dx/=dist; dy/=dist; desiredDir.x = dx*strength; desiredDir.y = dy*strength; } else { desiredDir.x=0; desiredDir.y=0; } if(Math.hypot(desiredDir.x,desiredDir.y) < 0.12){ desiredDir.x=0; desiredDir.y=0; } }
 
-function clientPoint(e){
-  if(e.touches && e.touches.length>0) return {x:e.touches[0].clientX, y:e.touches[0].clientY};
-  if(e.clientX !== undefined) return {x:e.clientX, y:e.clientY};
-  return null;
-}
-function pointInJoystickBase(pt){
-  const r = joystickBase.getBoundingClientRect();
-  return pt.x >= r.left && pt.x <= r.right && pt.y >= r.top && pt.y <= r.bottom;
-}
-
-function onPointerStart(e){
-  e.preventDefault();
-  const p = clientPoint(e);
-  if(!p) return;
-  pointerActive = true;
-  if(pointInJoystickBase(p)){
-    joystickActive = true;
-    updateJoystickFromPoint(p);
-  } else {
-    potentialTap = {x:p.x, y:p.y, start:performance.now(), moved:false};
-  }
-}
-function onPointerMove(e){
-  if(!pointerActive) return;
-  const p = clientPoint(e);
-  if(!p) return;
-  if(joystickActive){
-    updateJoystickFromPoint(p);
-  } else if(potentialTap){
-    const dx = p.x - potentialTap.x, dy = p.y - potentialTap.y;
-    if(Math.hypot(dx,dy) > 8) potentialTap.moved = true;
-  }
-}
-function onPointerEnd(e){
-  const p = clientPoint(e);
-  if(joystickActive){
-    joystickActive = false;
-    desiredDir.x = 0; desiredDir.y = 0;
-  } else if(potentialTap){
-    const dt = performance.now() - potentialTap.start;
-    if(!potentialTap.moved && dt < 600 && p){
-      const rect = canvas.getBoundingClientRect();
-      if(p.x >= rect.left && p.x <= rect.right && p.y >= rect.top && p.y <= rect.bottom){
-        const cx = p.x - rect.left, cy = p.y - rect.top;
-        handleActionAtScreen(cx, cy, rect);
-      }
-    }
-    potentialTap = null;
-  }
-  pointerActive = false;
-}
-
-function updateJoystickFromPoint(pt){
-  const baseRect = joystickBase.getBoundingClientRect();
-  const cx = baseRect.left + baseRect.width/2;
-  const cy = baseRect.top + baseRect.height/2;
-  let dx = pt.x - cx, dy = pt.y - cy;
-  const dist = Math.hypot(dx,dy);
-  const maxR = Math.min(baseRect.width, baseRect.height) * 0.42;
-  const strength = Math.min(dist / maxR, 1.0);
-  if(dist > 0.001){ dx /= dist; dy /= dist; desiredDir.x = dx * strength; desiredDir.y = dy * strength; }
-  else { desiredDir.x = 0; desiredDir.y = 0; }
-  if(Math.hypot(desiredDir.x, desiredDir.y) < 0.12) { desiredDir.x = 0; desiredDir.y = 0; }
-}
-
-// attach handlers
+// attach
 canvas.addEventListener('touchstart', onPointerStart, {passive:false});
 canvas.addEventListener('touchmove', onPointerMove, {passive:false});
 canvas.addEventListener('touchend', onPointerEnd, {passive:false});
@@ -335,124 +250,24 @@ joystickBase.addEventListener('touchmove', onPointerMove, {passive:false});
 joystickBase.addEventListener('touchend', onPointerEnd, {passive:false});
 joystickBase.addEventListener('mousedown', onPointerStart);
 
-// grid action: what happens on canvas tap
-function handleActionAtScreen(cx,cy,rect){
-  const tx = Math.floor((cx/rect.width) * mapData.width);
-  const ty = Math.floor((cy/rect.height) * mapData.height);
-  const tile = ((ty>=0 && ty<mapData._tiles.length && tx>=0 && tx<mapData._tiles[0].length) ? mapData._tiles[ty][tx] : 0);
-  if(tile === 2 || tile === 3){
-    const region = mapData.regions.find(r => tx >= r.x && tx < r.x + r.w && ty >= r.y && ty < r.y + r.h);
-    if(region) showToast(region.name + ' を調べます');
-    else showToast('領域です');
-  } else if(tile === 1){
-    showToast('道です');
-  } else {
-    showToast('壁です');
-  }
-}
-
-// Confirm action: enter region if adjacent
-function confirmAction(){
-  const px = Math.floor(state.player.x), py = Math.floor(state.player.y);
-  const adj = [];
-  for(const r of mapData.regions){
-    for(let yy=r.y; yy<r.y + r.h; yy++){
-      for(let xx=r.x; xx<r.x + r.w; xx++){
-        const d = Math.abs(xx - px) + Math.abs(yy - py);
-        if(d === 1) adj.push(r);
-      }
-    }
-  }
-  if(adj.length === 0){ showToast('近くに入れるエリアがありません（隣接して Confirm を押してください）', 1400); return; }
-  let chosen = adj[0];
-  const dgn = adj.find(a => a.type === 'dungeon');
-  if(dgn) chosen = dgn;
-  enterRegion(chosen);
-}
-
-function enterRegion(region){
-  if(region.type === 'farm'){
-    showToast('拠点に入ります: ' + region.name, 1100);
-    // spawn at entrance if returning from farm: set player to entrance
-    // TODO: open farm UI overlay
-  } else if(region.type === 'dungeon'){
-    const seed = Date.now();
-    showToast('ダンジョンへ移動: ' + region.name, 800);
-    setTimeout(()=>{ window.location.href = `dungeon.html?region=${encodeURIComponent(region.id)}&seed=${seed}`; }, 900);
-  } else {
-    showToast('Enter: ' + region.name);
-  }
-}
-
+// action / confirm
+function handleActionAtScreen(cx,cy,rect){ const tx = Math.floor((cx/rect.width) * mapData.width); const ty = Math.floor((cy/rect.height) * mapData.height); const tile = (ty>=0&&ty<mapData._tiles.length&&tx>=0&&tx<mapData._tiles[0].length)?mapData._tiles[ty][tx]:0; if(tile===2||tile===3){ const region = mapData.regions.find(r=> tx>=r.x && tx<r.x+r.w && ty>=r.y && ty<r.y+r.h); if(region) showToast(region.name + ' を調べます'); else showToast('領域'); } else if(tile===1) showToast('道'); else showToast('壁'); }
+function confirmAction(){ const px=Math.floor(state.player.x), py=Math.floor(state.player.y); const adj=[]; for(const r of mapData.regions){ for(let yy=r.y; yy<r.y+r.h; yy++){ for(let xx=r.x; xx<r.x+r.w; xx++){ const d = Math.abs(xx-px)+Math.abs(yy-py); if(d===1) adj.push(r); } } } if(adj.length===0){ showToast('近くに入れるエリアがありません',1200); return; } let chosen = adj[0]; const dgn = adj.find(a=>a.type==='dungeon'); if(dgn) chosen = dgn; enterRegion(chosen); }
+function enterRegion(region){ if(region.type==='farm'){ showToast('拠点に入ります: ' + region.name, 1000); } else if(region.type==='dungeon'){ const seed=Date.now(); showToast('ダンジョンへ: ' + region.name,700); setTimeout(()=>{ location.href = `dungeon.html?region=${encodeURIComponent(region.id)}&seed=${seed}`; }, 800); } else showToast('Enter ' + region.name); }
 confirmBtn.addEventListener('click', e=>{ e.preventDefault(); confirmAction(); });
 invBtn.addEventListener('click', e=>{ e.preventDefault(); openInventory(); });
 closeInv.addEventListener('click', e=>{ invModal.style.display='none'; invModal.setAttribute('aria-hidden','true'); });
+function openInventory(){ invGrid.innerHTML=''; for(const k in state.inventory){ const node=document.createElement('div'); node.className='invSlot'; node.textContent = `${k.replace('seed_','seed ')} x${state.inventory[k]}`; invGrid.appendChild(node); } invModal.style.display='block'; invModal.setAttribute('aria-hidden','false'); }
 
-function openInventory(){
-  invGrid.innerHTML = '';
-  for(const k in state.inventory){
-    const node = document.createElement('div');
-    node.className = 'invSlot';
-    node.textContent = `${k.replace('seed_','seed ')} x${state.inventory[k]}`;
-    invGrid.appendChild(node);
-  }
-  invModal.style.display='block';
-  invModal.setAttribute('aria-hidden','false');
-}
-
-// movement: discrete tile movement with passability check
-function tryStartMove(){
-  if(state.player.moving) return;
-  const dx = desiredDir.x, dy = desiredDir.y;
-  if(Math.hypot(dx,dy) < 0.35) return;
-  let mx = 0, my = 0;
-  if(Math.abs(dx) > Math.abs(dy)) mx = dx > 0 ? 1 : -1;
-  else my = dy > 0 ? 1 : -1;
-  const fromX = Math.floor(state.player.x), fromY = Math.floor(state.player.y);
-  const tx = clamp(fromX + mx, 0, mapData.width - 1);
-  const ty = clamp(fromY + my, 0, mapData.height - 1);
-  const tile = (ty>=0 && ty<mapData._tiles.length && tx>=0 && tx<mapData._tiles[0].length) ? mapData._tiles[ty][tx] : 0;
-  if(tile === 0) return; // wall
-  state.player.tx = tx; state.player.ty = ty; state.player.moving = true;
-}
-
+// movement
+function tryStartMove(){ if(state.player.moving) return; const dx = desiredDir.x, dy = desiredDir.y; if(Math.hypot(dx,dy) < 0.35) return; let mx=0,my=0; if(Math.abs(dx)>Math.abs(dy)) mx = dx>0?1:-1; else my = dy>0?1:-1; const fromX = Math.floor(state.player.x), fromY = Math.floor(state.player.y); const tx = clamp(fromX+mx,0,mapData.width-1); const ty = clamp(fromY+my,0,mapData.height-1); const tile = (ty>=0&&ty<mapData._tiles.length&&tx>=0&&tx<mapData._tiles[0].length)?mapData._tiles[ty][tx]:0; if(tile===0) return; state.player.tx=tx; state.player.ty=ty; state.player.moving=true; }
 const MOVE_SPEED = 6.0;
 let lastTime = performance.now();
-function step(now){
-  const dt = (now - lastTime)/1000; lastTime = now;
-  tryStartMove();
-  if(state.player.moving){
-    const tx = state.player.tx, ty = state.player.ty;
-    const speed = MOVE_SPEED * dt;
-    const dx = tx - state.player.x, dy = ty - state.player.y;
-    const dist = Math.hypot(dx,dy);
-    if(dist <= speed || dist < 0.001){
-      state.player.x = tx; state.player.y = ty; state.player.moving = false;
-    } else {
-      state.player.x += (dx/dist)*speed; state.player.y += (dy/dist)*speed;
-    }
-  }
-  updateUI();
-  draw();
-  updateJoystickVisual();
-  requestAnimationFrame(step);
-}
+function step(now){ const dt=(now-lastTime)/1000; lastTime=now; tryStartMove(); if(state.player.moving){ const tx=state.player.tx, ty=state.player.ty; const speed = MOVE_SPEED*dt; const dx = tx - state.player.x, dy = ty - state.player.y; const dist = Math.hypot(dx,dy); if(dist <= speed || dist < 0.001){ state.player.x = tx; state.player.y = ty; state.player.moving=false; } else { state.player.x += (dx/dist)*speed; state.player.y += (dy/dist)*speed; } } draw(); updateJoystickVisual(); requestAnimationFrame(step); }
+function updateUI(){ document.getElementById('hpText').textContent = `${Math.round(state.player.hp)}/${state.player.maxHp}`; document.getElementById('runCount').textContent = state.time.runCount; }
+function updateJoystickVisual(){ const baseRect = joystickBase.getBoundingClientRect(); const maxOffset = Math.min(baseRect.width, baseRect.height)*0.36; const offsetX = desiredDir.x * maxOffset; const offsetY = desiredDir.y * maxOffset; joystickKnob.style.left = `${50 + (offsetX / baseRect.width * 100)}%`; joystickKnob.style.top = `${50 + (offsetY / baseRect.height * 100)}%`; }
 
-function updateUI(){
-  hpText.textContent = `${Math.round(state.player.hp)}/${state.player.maxHp}`;
-  runCountText.textContent = state.time.runCount;
-}
-
-function updateJoystickVisual(){
-  const baseRect = joystickBase.getBoundingClientRect();
-  const maxOffset = Math.min(baseRect.width, baseRect.height) * 0.36;
-  const offsetX = desiredDir.x * maxOffset;
-  const offsetY = desiredDir.y * maxOffset;
-  joystickKnob.style.left = `${50 + (offsetX / baseRect.width * 100)}%`;
-  joystickKnob.style.top = `${50 + (offsetY / baseRect.height * 100)}%`;
-}
-
-// Start: load map then begin loop
+// start
 loadMap();
 
 </script>
