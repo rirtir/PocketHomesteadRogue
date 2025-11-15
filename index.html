@@ -3,14 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Pocket Homestead Rogue — Fixed Prototype (with UI overlays)</title>
+<title>Pocket Homestead Rogue — Fixed Prototype (Joystick area fixed)</title>
 <style>
   html,body{height:100%;margin:0;background:#0b0b0b;color:#ddd;font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP";}
   #gameWrap{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;min-height:100vh;box-sizing:border-box;padding:8px;}
   .hud{width:100%;max-width:480px;box-sizing:border-box;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
   .btn{background:#222;border:1px solid #444;padding:6px 8px;border-radius:6px;color:#eee;touch-action:manipulation}
   .small{font-size:12px;color:#bbb}
-  /* canvas responsive: keep logical resolution CANVAS_W x CANVAS_H, scale to fit viewport height */
   .canvasWrap{width:100%;max-width:480px;flex:0 0 auto;display:flex;justify-content:center;position:relative;}
   canvas{background:#1b1b1b; image-rendering: pixelated; border-radius:6px; display:block; width:100%; height: calc(100vh - 180px); max-height:640px; touch-action:none;}
   .bottomUI{width:100%;max-width:480px;display:flex;justify-content:space-between;align-items:center;padding-top:6px;box-sizing:border-box;}
@@ -19,16 +18,16 @@
   .exportArea{width:100%;max-width:480px;margin-top:6px;}
   .footerNote{font-size:12px;color:#888;margin-top:4px;}
 
-  /* Overlay UI */
+  /* Overlay UI - enlarged joystick */
   .joystickBase{
     position:absolute;
     left:12px;
     bottom:12px;
-    width:110px;
-    height:110px;
+    width:140px;           /* larger visible area */
+    height:140px;
     border-radius:50%;
-    background:rgba(20,20,20,0.45);
-    border:2px solid rgba(255,255,255,0.06);
+    background:rgba(20,20,20,0.55);
+    border:2px solid rgba(255,255,255,0.04);
     display:flex;
     align-items:center;
     justify-content:center;
@@ -36,17 +35,17 @@
     -webkit-user-select:none;
     user-select:none;
     z-index:30;
-    box-shadow:0 4px 10px rgba(0,0,0,0.6);
+    box-shadow:0 6px 18px rgba(0,0,0,0.6);
   }
   .joystickGuide{
     position:absolute;
-    width:54px;height:54px;border-radius:50%;
-    background:rgba(255,255,255,0.03);
-    border:1px dashed rgba(255,255,255,0.03);
+    width:70px;height:70px;border-radius:50%;
+    background:rgba(255,255,255,0.02);
+    border:1px dashed rgba(255,255,255,0.02);
   }
   .joystickKnob{
     position:absolute;
-    width:36px;height:36px;border-radius:50%;
+    width:46px;height:46px;border-radius:50%;
     background:rgba(255,255,255,0.12);
     border:1px solid rgba(255,255,255,0.12);
     transform:translate(-50%,-50%);
@@ -58,8 +57,8 @@
     position:absolute;
     right:10px;
     bottom:12px;
-    min-width:66px;
-    height:66px;
+    min-width:72px;
+    height:72px;
     border-radius:12px;
     background:linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.08));
     border:2px solid rgba(255,255,255,0.06);
@@ -73,23 +72,24 @@
     touch-action:manipulation;
     -webkit-user-select:none;
     user-select:none;
-    box-shadow:0 6px 18px rgba(0,0,0,0.6);
+    box-shadow:0 8px 22px rgba(0,0,0,0.6);
   }
   .confirmBtn:active{ transform: translateY(1px) scale(0.995); }
 
-  /* Small translucent label */
   .uiLabel{
     position:absolute;
     left:12px;
-    bottom:130px;
-    font-size:12px;color:#cfcfcf;opacity:0.8;
+    bottom:162px;
+    font-size:12px;color:#cfcfcf;opacity:0.9;
     z-index:29;
   }
 
   @media (max-width:420px){
-    .joystickBase{width:90px;height:90px;}
-    .joystickKnob{width:30px;height:30px;}
-    .confirmBtn{width:60px;height:60px;}
+    .joystickBase{width:110px;height:110px;}
+    .joystickGuide{width:54px;height:54px;}
+    .joystickKnob{width:40px;height:40px;}
+    .confirmBtn{width:64px;height:64px;}
+    .uiLabel{bottom:140px;}
   }
 </style>
 </head>
@@ -139,18 +139,19 @@
 </div>
 
 <script>
-/* Fixed prototype + visible joystick overlay & confirm button:
- - visual joystick shows base + knob; responds to drag/tap on the base
- - confirm button triggers the same action as tapping the screen at player's tile
- - overlays call existing handlers (handleJoystick / handleActionAtScreen)
+/* Changes:
+ - Joystick input region now matches visible joystickBase bounding rect.
+ - desiredDir includes magnitude (0..1) based on knob distance.
+ - Canvas taps outside joystickBase are treated as action taps.
+ - Visual knob follows desiredDir.
 */
 
 // CONFIG
 const TILE = 16;
 const VIEW_W_TILES = 9;
 const VIEW_H_TILES = 16;
-const CANVAS_W = VIEW_W_TILES * TILE;   // 144
-const CANVAS_H = VIEW_H_TILES * TILE;   // 256
+const CANVAS_W = VIEW_W_TILES * TILE;
+const CANVAS_H = VIEW_H_TILES * TILE;
 const SAVE_KEY = 'pocketHomestead_v1_save';
 
 // DOM
@@ -175,7 +176,7 @@ const joystickBase = document.getElementById('joystickBase');
 const joystickKnob = document.getElementById('joystickKnob');
 const confirmBtn = document.getElementById('confirmBtn');
 
-// STATE (same as original)
+// STATE
 let state = {
   player: { tx:8, ty:12, x:8, y:12, hp:30, maxHp:30, moving:false },
   inventory: {seed_wheat:5, trap_egg:1, fertilizer_basic:0},
@@ -252,7 +253,7 @@ function updateUI(){
   slotTrap.textContent = `Trap x${state.inventory.trap_egg||0}`;
 }
 
-// CAMERA
+// CAMERA & DRAW (unchanged)
 function camera(){
   const map = (state.ui.inDungeon && state.map.dungeon) ? state.map.dungeon : state.map.home;
   if(!map) return {x:0,y:0,map:{w:VIEW_W_TILES,h:VIEW_H_TILES,tiles:[]}};
@@ -263,7 +264,6 @@ function camera(){
   return {x:camx, y:camy, map};
 }
 
-// RENDER (robust guards)
 function draw(){
   ctx.fillStyle = '#1b1b1b';
   ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -365,34 +365,58 @@ function draw(){
   }
 }
 
-// --- Existing input / gameplay code (slightly refactored to be callable) ---
-
-let desiredDir = {x:0,y:0};
+// INPUT / JOYSTICK LOGIC (updated to use joystickBase rect)
+let desiredDir = {x:0,y:0}; // includes magnitude (strength)
 const MOVE_SPEED = 6.0;
-function getPoint(e){
+
+// get client point helper
+function clientPointFromEvent(e){
   if(e.touches && e.touches.length>0) return {x:e.touches[0].clientX, y:e.touches[0].clientY};
-  if(e.clientX!==undefined) return {x:e.clientX, y:e.clientY};
+  if(e.clientX !== undefined) return {x:e.clientX, y:e.clientY};
   return null;
 }
 
-function handleJoystick(p){
-  // p is {x:clientX, y:clientY} (client coordinates)
-  const rect = canvas.getBoundingClientRect();
-  const cx = p.x - rect.left, cy = p.y - rect.top;
-  // define joystick area as left half bottom region
-  if(cx < rect.width * 0.6 && cy > rect.height * 0.4){
-    const centerX = rect.width * 0.25;
-    const centerY = rect.height * 0.8;
-    let dx = cx - centerX;
-    let dy = cy - centerY;
-    const mag = Math.hypot(dx,dy) || 1;
-    dx /= mag; dy /= mag;
-    desiredDir.x = dx;
-    desiredDir.y = dy;
+// Whether a client point is inside joystickBase on screen
+function pointInJoystickBase(pt){
+  const r = joystickBase.getBoundingClientRect();
+  return pt.x >= r.left && pt.x <= r.right && pt.y >= r.top && pt.y <= r.bottom;
+}
+
+// Handle a client point: if inside joystick base => joystick input, else => action tap
+function handleClientPoint(pt){
+  const baseRect = joystickBase.getBoundingClientRect();
+  if(pt && pointInJoystickBase(pt)){
+    // compute vector relative to base center
+    const centerX = baseRect.left + baseRect.width / 2;
+    const centerY = baseRect.top + baseRect.height / 2;
+    let dx = pt.x - centerX;
+    let dy = pt.y - centerY;
+    // maximum radius (use guide circle)
+    const maxR = Math.min(baseRect.width, baseRect.height) * 0.42;
+    const dist = Math.hypot(dx,dy);
+    let strength = Math.min(dist / maxR, 1.0); // 0..1
+    if(dist > 0.001){
+      dx = dx / dist;
+      dy = dy / dist;
+      desiredDir.x = dx * strength;
+      desiredDir.y = dy * strength;
+    } else {
+      desiredDir.x = 0; desiredDir.y = 0;
+    }
+    // ensure small deadzone
+    if(Math.hypot(desiredDir.x, desiredDir.y) < 0.12){ desiredDir.x = 0; desiredDir.y = 0; }
   } else {
-    handleActionAtScreen(cx,cy,rect);
+    // outside joystick: treat as action tap on canvas area
+    const rect = canvas.getBoundingClientRect();
+    // ignore if tap is outside canvas (e.g. on UI)
+    if(pt.x < rect.left || pt.x > rect.right || pt.y < rect.top || pt.y > rect.bottom) return;
+    const cx = pt.x - rect.left;
+    const cy = pt.y - rect.top;
+    handleActionAtScreen(cx, cy, rect);
   }
 }
+
+// old handleActionAtScreen / movement / capture functions (unchanged)
 function handleActionAtScreen(cx,cy,rect){
   const cam = camera();
   const tx = Math.floor((cx/rect.width)*VIEW_W_TILES) + cam.x;
@@ -410,7 +434,6 @@ function handleActionAtScreen(cx,cy,rect){
     }
   }
 }
-
 function tryStartMove(){
   if(state.player.moving) return;
   const dx = desiredDir.x; const dy = desiredDir.y;
@@ -453,81 +476,36 @@ function attemptCapture(m){
   updateUI();
 }
 
-// Original canvas pointer handlers (kept for backward compatibility)
-// but they'll not interfere when overlays handle events and call handlers.
-// leave these so taps directly on canvas still work.
-canvas.addEventListener('touchstart', onPointerStart, {passive:false});
-canvas.addEventListener('touchmove', onPointerMove, {passive:false});
-canvas.addEventListener('touchend', onPointerEnd, {passive:false});
-canvas.addEventListener('mousedown', e=>{ onPointerStart(mouseToTouch(e)); }, {passive:false});
-canvas.addEventListener('mousemove', e=>{ if(e.buttons) onPointerMove(mouseToTouch(e)); }, {passive:false});
-canvas.addEventListener('mouseup', e=>onPointerEnd(mouseToTouch(e)), {passive:false});
-function mouseToTouch(e){ return {clientX:e.clientX, clientY:e.clientY}; }
-function onPointerStart(e){ e.preventDefault(); const p=getPoint(e); if(p) handleJoystick(p); }
-function onPointerMove(e){ e.preventDefault(); const p=getPoint(e); if(p) handleJoystick(p); }
-function onPointerEnd(e){ desiredDir.x = 0; desiredDir.y = 0; }
+// Canvas pointer handlers now dispatch based on joystick visible rect
+canvas.addEventListener('touchstart', function(e){ e.preventDefault(); const p = clientPointFromEvent(e); if(p) handleClientPoint(p); }, {passive:false});
+canvas.addEventListener('touchmove', function(e){ e.preventDefault(); const p = clientPointFromEvent(e); if(p) handleClientPoint(p); }, {passive:false});
+canvas.addEventListener('touchend', function(e){ e.preventDefault(); desiredDir.x = 0; desiredDir.y = 0; }, {passive:false});
+canvas.addEventListener('mousedown', function(e){ const p = clientPointFromEvent(e); if(p) handleClientPoint(p); }, {passive:false});
+canvas.addEventListener('mousemove', function(e){ if(e.buttons){ const p = clientPointFromEvent(e); if(p) handleClientPoint(p); } }, {passive:false});
+canvas.addEventListener('mouseup', function(e){ desiredDir.x = 0; desiredDir.y = 0; }, {passive:false});
 
-// --- Overlay handlers (call the same handlers but with coordinates) ---
+// Overlay joystick handlers (so dragging directly on the visible base works too)
 let joystickActive = false;
+joystickBase.addEventListener('touchstart', function(e){ e.preventDefault(); joystickActive = true; const p = clientPointFromEvent(e); if(p) handleClientPoint(p); }, {passive:false});
+joystickBase.addEventListener('touchmove', function(e){ e.preventDefault(); const p = clientPointFromEvent(e); if(p) handleClientPoint(p); }, {passive:false});
+joystickBase.addEventListener('touchend', function(e){ e.preventDefault(); joystickActive = false; desiredDir.x = 0; desiredDir.y = 0; }, {passive:false});
+joystickBase.addEventListener('mousedown', function(e){ e.preventDefault(); joystickActive = true; const p = clientPointFromEvent(e); if(p) handleClientPoint(p); });
+window.addEventListener('mousemove', function(e){ if(!joystickActive) return; const p = clientPointFromEvent(e); if(p) handleClientPoint(p); });
+window.addEventListener('mouseup', function(e){ if(joystickActive){ joystickActive = false; desiredDir.x = 0; desiredDir.y = 0; } });
 
-function overlayGetClientPointFromEvent(e){
-  if(e.touches && e.touches.length>0) return {x:e.touches[0].clientX, y:e.touches[0].clientY};
-  if(e.clientX!==undefined) return {x:e.clientX, y:e.clientY};
-  return null;
-}
-
-// Joystick base pointer handlers
-joystickBase.addEventListener('touchstart', function(e){
-  e.preventDefault(); e.stopPropagation();
-  joystickActive = true;
-  const p = overlayGetClientPointFromEvent(e);
-  if(p) handleJoystick(p);
-}, {passive:false});
-joystickBase.addEventListener('touchmove', function(e){
-  e.preventDefault(); e.stopPropagation();
-  const p = overlayGetClientPointFromEvent(e);
-  if(p) handleJoystick(p);
-}, {passive:false});
-joystickBase.addEventListener('touchend', function(e){
-  e.preventDefault(); e.stopPropagation();
-  joystickActive = false;
-  desiredDir.x = 0; desiredDir.y = 0;
-}, {passive:false});
-
-// mouse support for joystick
-joystickBase.addEventListener('mousedown', function(e){
-  e.preventDefault(); e.stopPropagation();
-  joystickActive = true;
-  const p = overlayGetClientPointFromEvent(e);
-  if(p) handleJoystick(p);
-});
-window.addEventListener('mousemove', function(e){
-  if(!joystickActive) return;
-  e.preventDefault(); e.stopPropagation();
-  const p = overlayGetClientPointFromEvent(e);
-  if(p) handleJoystick(p);
-});
-window.addEventListener('mouseup', function(e){
-  if(joystickActive){
-    joystickActive = false;
-    desiredDir.x = 0; desiredDir.y = 0;
-  }
-});
-
-// Confirm button: trigger action at player's tile (map-relative)
+// Confirm button: do action at player's tile
 confirmBtn.addEventListener('click', function(e){
   e.preventDefault(); e.stopPropagation();
   const rect = canvas.getBoundingClientRect();
   const cam = camera();
-  // compute cx/cy relative to canvas such that it targets the player's tile
-  const playerScreenX = (state.player.x - cam.x + 0.5); // in tile units
+  const playerScreenX = (state.player.x - cam.x + 0.5);
   const playerScreenY = (state.player.y - cam.y + 0.5);
   const cx = (playerScreenX / VIEW_W_TILES) * rect.width;
   const cy = (playerScreenY / VIEW_H_TILES) * rect.height;
   handleActionAtScreen(cx, cy, rect);
 });
 
-// Dungeon flow (same as original)
+// Dungeon flow
 dungeonBtn.onclick = function(){
   if(!state.ui.inDungeon){
     state.map.dungeon = genDungeon(Date.now());
@@ -605,22 +583,14 @@ requestAnimationFrame(step);
 // autosave
 setInterval(()=>{ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }catch(e){} }, 15000);
 
-// --- Joystick visual update ---
+// Joystick visual update: position knob according to desiredDir vector & base size
 function updateJoystickVisual(){
-  // knob moves inside joystickBase according to desiredDir and whether joystickActive
   const baseRect = joystickBase.getBoundingClientRect();
-  const knobRect = joystickKnob.getBoundingClientRect();
-  const centerX = baseRect.left + baseRect.width/2;
-  const centerY = baseRect.top + baseRect.height/2;
-  // knob radius limit
-  const maxOffset = Math.min(baseRect.width, baseRect.height) * 0.28;
-  // we use desiredDir as direction; if not active, move knob to center
-  let offsetX = 0, offsetY = 0;
-  if(Math.hypot(desiredDir.x, desiredDir.y) > 0.001){
-    offsetX = desiredDir.x * maxOffset;
-    offsetY = desiredDir.y * maxOffset;
-  }
-  // compute knob position relative to base (using transform)
+  const maxOffset = Math.min(baseRect.width, baseRect.height) * 0.36;
+  // desiredDir already encodes direction * strength (0..1)
+  const offsetX = desiredDir.x * maxOffset;
+  const offsetY = desiredDir.y * maxOffset;
+  // convert to percent relative to base
   joystickKnob.style.left = `${50 + (offsetX / baseRect.width * 100)}%`;
   joystickKnob.style.top = `${50 + (offsetY / baseRect.height * 100)}%`;
 }
